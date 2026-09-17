@@ -1,7 +1,19 @@
 # Journal de trading — mode d'emploi
 
-Tout est dans un seul fichier : **index.html**. Double-clic dessus, ça s'ouvre dans Chrome.
-Aucun compte, aucune connexion, aucun serveur, rien qui sort de ton ordinateur.
+Deux façons de l'ouvrir, au choix :
+
+- **En ligne** : <https://vaelordesign.github.io/journal-trading/> — pratique sur le téléphone,
+  et tu peux l'ajouter à l'écran d'accueil.
+- **En local** : double-clic sur **index.html**, ça s'ouvre dans Chrome.
+
+Dans les deux cas : aucun compte, aucune connexion, aucun serveur qui garde quoi que ce soit.
+Tes trades restent dans le navigateur de l'appareil, même en ligne : la page est servie par
+GitHub, les données ne lui sont jamais envoyées.
+
+**Attention, une adresse = une base.** Le fichier local et la version en ligne ne partagent
+pas leurs données, et le téléphone ne partage pas non plus avec l'ordinateur. Pour passer de
+l'un à l'autre : **Exporter** d'un côté, **Importer** de l'autre. Choisis un endroit principal
+et tiens-t'y.
 
 ---
 
