@@ -3408,12 +3408,17 @@ async function exporterTout(avecImages){
     var nom = 'journal-trading-' + cleJour(d.getTime()) + '-' +
       String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0') +
       (avecImages ? '' : '-sans-images') + '.json';
+    var lien = URL.createObjectURL(b);
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(b);
+    a.href = lien;
     a.download = nom;
     document.body.appendChild(a);
     a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    // On garde l'URL du blob en vie longtemps : le navigateur ecrit le fichier
+    // en arriere-plan et une sauvegarde pleine de captures peut peser des dizaines
+    // de megaoctets. Revoquer trop tot ANNULE le telechargement en cours.
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(lien); }, 600000);
     toast('Sauvegarde téléchargée : ' + nom + ' (' + Math.round(txt.length / 1024) + ' Ko' +
       (avecImages ? ', ' + images.length + ' image(s)' : ', sans les images') + ')', 'vertf');
   } catch (e) {
