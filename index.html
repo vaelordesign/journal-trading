@@ -561,6 +561,10 @@ svg text{font-family:inherit}
       </div>
     </div>
     <div class="carte">
+      <h3>Photos de la journée <span class="petit gris" id="journalPhotosJour"></span></h3>
+      <div id="journalPhotos"></div>
+    </div>
+    <div class="carte">
       <h3>Journées déjà écrites</h3>
       <div id="journalListe"></div>
     </div>
@@ -1472,6 +1476,9 @@ var E = {
 var CHAMPS_ANNOTATION = ['stopPrevu', 'ciblePrevue', 'notes', 'tags', 'note',
                          'playbookId', 'regles', 'nbImages', 'favori'];
 
+// bloc photos de l'ecran Journal quotidien, pour que Ctrl+V sache ou deposer
+var photosJournal = null;
+
 /* =======================================================================
    OUTILS DOM
    ======================================================================= */
@@ -2218,9 +2225,14 @@ function ouvrirJour(cle){
         (note.biais ? ech(note.biais) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
       '<div><h4>Bilan du soir</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
         (note.bilan ? ech(note.bilan) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
-    '</div>';
+    '</div>' +
+    '<h4 style="margin-top:14px">Photos de la journée</h4>' +
+    '<div id="jourPhotos"></div>';
   var m = modale(fmtJourLong(cle), corps,
     '<button id="btnVersJournal">Ouvrir le journal de ce jour</button><button data-fermer>Fermer</button>', 'large');
+  installerPhotos('jour:' + cle, $('#jourPhotos', m), {
+    vide: 'Aucune photo pour cette journée.'
+  }).then(function(p){ m._ajouterImages = p.ajouter; });
   $('#btnVersJournal', m).onclick = function(){
     fermerModale();
     E.journalDate = cle;
@@ -2415,16 +2427,8 @@ async function ouvrirTrade(cle){
     '</div>' +
   '</div>' +
 
-  '<h4 style="margin-top:6px">Photos du trade <span class="gris" style="text-transform:none;letter-spacing:0">avant / après, autant que tu veux</span></h4>' +
-  '<div class="galerie" id="tdGalerie"></div>' +
-  '<div class="zone-coller" id="tdZoneColler">' +
-    '<button class="primaire" id="tdChoisirImg">&#128247;&nbsp; Ajouter des photos</button>' +
-    '<div class="petit gris" style="margin-top:8px">' +
-      'Sur téléphone, ce bouton ouvre l\'appareil photo ou la galerie. ' +
-      'Sur ordinateur, tu peux aussi faire <b>Ctrl+V</b> pour coller une capture, ou glisser l\'image ici.' +
-    '</div>' +
-    '<input type="file" id="tdFichierImg" accept="image/*" multiple hidden>' +
-  '</div>';
+  '<h4 style="margin-top:6px">Photos de ce trade <span class="gris" style="text-transform:none;letter-spacing:0">avant / après, autant que tu veux</span></h4>' +
+  '<div id="tdPhotos"></div>';
 
   var pied =
     (t.source === 'manuel' ? '<button class="dangereux" id="tdSupprimer">Supprimer ce trade</button>' : '') +
@@ -2509,77 +2513,23 @@ async function ouvrirTrade(cle){
     $('#tdNvEtq').value = '';
   };
 
-  // ---------- images ----------
-  async function majGalerie(){
-    var imgs = await dbParParent('trade:' + cle);
-    $('#tdGalerie').innerHTML = imgs.length ? imgs.sort(function(a, b){ return a.date - b.date; }).map(function(im){
-      return '<figure><img src="' + urlBlob(im.blob) + '" data-voir="' + im.id + '" alt="">' +
-        '<button class="sup" data-sup="' + im.id + '">&#10005;</button>' +
-        '<figcaption>' + ech(im.nom || '') + '</figcaption></figure>';
-    }).join('') : '<div class="petit gris">Aucune capture pour l\'instant.</div>';
-    $$('#tdGalerie [data-sup]').forEach(function(b){
-      b.onclick = async function(e){
-        e.stopPropagation();
-        await dbSupprimer('images', b.dataset.sup);
-        t.nbImages = Math.max(0, (t.nbImages || 1) - 1);
-        await dbMettre('trades', nettoyerPourDb(t));
-        majGalerie();
-      };
-    });
-    $$('#tdGalerie [data-voir]').forEach(function(i){
-      i.onclick = function(){ grandeImage(i.src); };
-    });
-    t.nbImages = imgs.length;
-  }
-  await majGalerie();
-
-  async function ajouterImages(fichiers){
-    var n = 0, gagne = 0, refuses = [];
-    var bouton = $('#tdChoisirImg');
-    if (bouton) { bouton.disabled = true; bouton.textContent = 'Ajout en cours...'; }
-    for (var i = 0; i < fichiers.length; i++) {
-      var f = fichiers[i];
-      if (!f) continue;
-      if (f.type && f.type.indexOf('image/') !== 0) { refuses.push((f.name || 'fichier') + ' n\'est pas une image'); continue; }
-      var prep = await preparerImage(f);
-      if (prep.illisible) { refuses.push((f.name || 'photo') + ' : format que le navigateur ne sait pas afficher (HEIC de l\'iPhone ?), convertis-la en JPEG'); continue; }
-      await dbMettre('images', {
-        id: uid(), parent: 'trade:' + cle, blob: prep.blob,
-        nom: prep.nom, type: prep.blob.type, date: Date.now(),
-        largeur: prep.largeur || null, hauteur: prep.hauteur || null
-      });
-      if (prep.gagne) gagne += prep.gagne;
-      n++;
+  // ---------- photos ----------
+  var photos = await installerPhotos('trade:' + cle, $('#tdPhotos', m), {
+    idInput: 'tdFichierImg',
+    vide: 'Aucune photo pour ce trade.',
+    surMaj: async function(nb){
+      // le compte sert a afficher la pastille dans la liste des trades
+      if (t.nbImages !== nb) { t.nbImages = nb; await dbMettre('trades', nettoyerPourDb(t)); }
     }
-    if (bouton) { bouton.disabled = false; bouton.innerHTML = '&#128247;&nbsp; Ajouter des photos'; }
-    if (n) {
-      await majGalerie();
-      await dbMettre('trades', nettoyerPourDb(t));
-      $('#tdGalerie').scrollIntoView({ block: 'nearest' });
-      toast(n + ' photo' + (n > 1 ? 's' : '') + ' ajoutée' + (n > 1 ? 's' : '') +
-        (gagne > 1024 ? ' <span class="gris">(allégées de ' + fmtOctets(gagne) + ')</span>' : ''), 'vertf');
-    }
-    if (refuses.length) toast(refuses.join('<br>'), 'rougef');
-    return n;
-  }
-  m._ajouterImages = ajouterImages;
-  // bouton toujours visible en haut de la fenetre, meme quand on a defile
+  });
+  m._ajouterImages = photos.ajouter;
+  // bouton toujours visible en haut de la fenetre, meme apres avoir defile
   var btnHaut = document.createElement('button');
   btnHaut.className = 'primaire pt';
   btnHaut.innerHTML = '&#128247;&nbsp; Photos';
-  btnHaut.title = 'Ajouter des photos a ce trade';
-  btnHaut.onclick = function(){ $('#tdFichierImg').click(); };
+  btnHaut.title = 'Ajouter des photos à ce trade';
+  btnHaut.onclick = function(){ photos.input.click(); };
   $('.modale-entete', m).insertBefore(btnHaut, $('.modale-entete .fermer', m));
-  $('#tdChoisirImg', m).onclick = function(){ $('#tdFichierImg').click(); };
-  $('#tdFichierImg', m).onchange = function(e){ ajouterImages(e.target.files); e.target.value = ''; };
-  var zc = $('#tdZoneColler', m);
-  ['dragenter', 'dragover'].forEach(function(ev){
-    zc.addEventListener(ev, function(e){ e.preventDefault(); zc.classList.add('survol'); });
-  });
-  ['dragleave', 'drop'].forEach(function(ev){
-    zc.addEventListener(ev, function(e){ e.preventDefault(); zc.classList.remove('survol'); });
-  });
-  zc.addEventListener('drop', function(e){ ajouterImages(e.dataTransfer.files); });
 
   // ---------- enregistrement ----------
   $('#tdEnregistrer', m).onclick = async function(){
@@ -2659,6 +2609,104 @@ function fmtOctets(o){
   if (o < 1024) return o + ' o';
   if (o < 1024 * 1024) return Math.round(o / 1024) + ' Ko';
   return fmtNombre(o / 1024 / 1024, 1) + ' Mo';
+}
+
+/* ---------------------------------------------------------------
+   BLOC PHOTOS reutilisable : galerie + bouton + Ctrl+V + glisser-deposer.
+   Sert au detail d'un trade, au journal quotidien et a la fenetre d'une
+   journee, pour qu'il n'y ait qu'un seul code a corriger.
+     parent : ou les images sont rangees, 'trade:<cle>' ou 'jour:2026-09-18'
+     hote   : l'element dans lequel tout est dessine
+     o      : { idInput, vide, surMaj }
+   --------------------------------------------------------------- */
+async function installerPhotos(parent, hote, o){
+  o = o || {};
+  var n = uid();
+  var idg = 'phg' + n, idz = 'phz' + n, idb = 'phb' + n;
+  var idf = o.idInput || ('phf' + n);
+  var urlsLocales = [];
+  hote.innerHTML =
+    '<div class="galerie" id="' + idg + '"></div>' +
+    '<div class="zone-coller" id="' + idz + '">' +
+      '<button class="primaire" id="' + idb + '">&#128247;&nbsp; Ajouter des photos</button>' +
+      '<div class="petit gris" style="margin-top:8px">' +
+        'Sur téléphone, ce bouton ouvre l\'appareil photo ou la galerie. ' +
+        'Sur ordinateur, tu peux aussi faire <b>Ctrl+V</b> pour coller une capture, ou glisser l\'image ici.' +
+      '</div>' +
+      '<input type="file" id="' + idf + '" accept="image/*" multiple hidden>' +
+    '</div>';
+  var g = $('#' + idg), z = $('#' + idz), b = $('#' + idb), f = $('#' + idf);
+
+  function libererLocales(){
+    urlsLocales.forEach(function(u){ try { URL.revokeObjectURL(u); } catch (e) {} });
+    urlsLocales = [];
+  }
+  async function maj(){
+    var imgs = await dbParParent(parent);
+    imgs.sort(function(a, b2){ return a.date - b2.date; });
+    libererLocales();
+    g.innerHTML = imgs.length ? imgs.map(function(im){
+      var u = URL.createObjectURL(im.blob);
+      urlsLocales.push(u);
+      return '<figure><img src="' + u + '" data-voir="1" alt="">' +
+        '<button class="sup" data-sup="' + im.id + '" title="supprimer">&#10005;</button>' +
+        '<figcaption>' + ech(im.nom || '') + '</figcaption></figure>';
+    }).join('') : '<div class="petit gris" style="grid-column:1/-1">' + (o.vide || 'Aucune photo pour l\'instant.') + '</div>';
+    $$('[data-sup]', g).forEach(function(bt){
+      bt.onclick = async function(e){
+        e.stopPropagation();
+        if (!await confirmer('Supprimer cette photo ?', 'Supprimer')) return;
+        await dbSupprimer('images', bt.dataset.sup);
+        await maj();
+      };
+    });
+    $$('[data-voir]', g).forEach(function(i){ i.onclick = function(){ grandeImage(i.src); }; });
+    if (o.surMaj) await o.surMaj(imgs.length);
+    return imgs.length;
+  }
+  async function ajouter(fichiers){
+    var nb = 0, gagne = 0, refuses = [];
+    b.disabled = true; b.textContent = 'Ajout en cours...';
+    for (var i = 0; i < fichiers.length; i++) {
+      var fi = fichiers[i];
+      if (!fi) continue;
+      if (fi.type && fi.type.indexOf('image/') !== 0) { refuses.push((fi.name || 'fichier') + ' n\'est pas une image'); continue; }
+      var prep = await preparerImage(fi);
+      if (prep.illisible) {
+        refuses.push((fi.name || 'photo') + ' : format que le navigateur ne sait pas afficher (HEIC de l\'iPhone ?), convertis-la en JPEG');
+        continue;
+      }
+      await dbMettre('images', {
+        id: uid(), parent: parent, blob: prep.blob, nom: prep.nom,
+        type: prep.blob.type, date: Date.now(),
+        largeur: prep.largeur || null, hauteur: prep.hauteur || null
+      });
+      if (prep.gagne) gagne += prep.gagne;
+      nb++;
+    }
+    b.disabled = false; b.innerHTML = '&#128247;&nbsp; Ajouter des photos';
+    if (nb) {
+      await maj();
+      g.scrollIntoView({ block: 'nearest' });
+      toast(nb + ' photo' + (nb > 1 ? 's' : '') + ' ajoutée' + (nb > 1 ? 's' : '') +
+        (gagne > 1024 ? ' <span class="gris">(allégée' + (nb > 1 ? 's' : '') + ' de ' + fmtOctets(gagne) + ')</span>' : ''), 'vertf');
+    }
+    if (refuses.length) toast(refuses.join('<br>'), 'rougef');
+    return nb;
+  }
+
+  b.onclick = function(){ f.click(); };
+  f.onchange = function(e){ ajouter(e.target.files); e.target.value = ''; };
+  ['dragenter', 'dragover'].forEach(function(ev){
+    z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.add('survol'); });
+  });
+  ['dragleave', 'drop'].forEach(function(ev){
+    z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.remove('survol'); });
+  });
+  z.addEventListener('drop', function(e){ ajouter(e.dataTransfer.files); });
+
+  await maj();
+  return { maj: maj, ajouter: ajouter, input: f };
 }
 
 function grandeImage(src){
@@ -3028,18 +3076,45 @@ function rendreJournal(){
     tr.onclick = function(){ ouvrirTrade(tr.dataset.cle); };
   });
 
+  // photos de la journee : rangees sous 'jour:<date>', a part des photos de trade
+  installerPhotos('jour:' + cle, $('#journalPhotos'), {
+    idInput: 'jrFichierImg',
+    vide: 'Aucune photo pour cette journée. Le bouton ci-dessous ajoute tes captures du jour : ' +
+          'le graphique du matin, tes niveaux, une photo de ton plan sur papier.',
+    surMaj: function(nb){
+      $('#journalPhotosJour').textContent = nb ? nb + ' photo' + (nb > 1 ? 's' : '') : '';
+    }
+  }).then(function(p){ photosJournal = p; });
+
+  majListeJournees();
+}
+
+// la liste des journees, avec le nombre de photos de chacune
+async function majListeJournees(){
+  var imgs = [];
+  try { imgs = await dbTous('images'); } catch (e) {}
+  var parJour = {};
+  imgs.forEach(function(i){
+    if (i.parent && i.parent.indexOf('jour:') === 0) {
+      var d = i.parent.slice(5);
+      parJour[d] = (parJour[d] || 0) + 1;
+    }
+  });
   var cles = Object.keys(E.jours).filter(function(c){
     var j = E.jours[c];
     return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim());
-  }).sort().reverse();
+  });
+  Object.keys(parJour).forEach(function(c){ if (cles.indexOf(c) < 0) cles.push(c); });
+  cles.sort().reverse();
   var tousStats = statsDeTrades(tousLesTradesReels());
   $('#journalListe').innerHTML = cles.length ? '<div class="liste-pieces">' + cles.slice(0, 40).map(function(c){
-    var j = E.jours[c];
+    var j = E.jours[c] || {};
     var net = tousStats.jours[c] ? tousStats.jours[c].net : null;
     var extrait = ((j.biais || '') + ' ' + (j.bilan || '')).trim().replace(/\s+/g, ' ').slice(0, 110);
     return '<div class="piece" data-jr="' + c + '">' +
       '<div style="flex:1 1 auto"><div class="t">' + fmtJourLong(c) + '</div>' +
-      '<div class="d">' + ech(extrait) + (extrait.length >= 110 ? '...' : '') + '</div></div>' +
+      '<div class="d">' + (extrait ? ech(extrait) + (extrait.length >= 110 ? '...' : '') : '<i>pas de texte</i>') + '</div></div>' +
+      (parJour[c] ? '<div class="puce a nowrap">&#128247; ' + parJour[c] + '</div>' : '') +
       '<div class="' + cls(net) + ' gras nowrap">' + (net === null ? '' : signe(net, 0)) + '</div></div>';
   }).join('') + '</div>' : '<div class="petit gris">Aucune journée écrite pour l\'instant.</div>';
   $$('#journalListe [data-jr]').forEach(function(d){
@@ -3053,6 +3128,7 @@ async function enregistrerJournal(){
   await dbMettre('jours', n);
   E.jours[cle] = n;
   $('#journalEtat').textContent = 'enregistré le ' + fmtDate(n.maj);
+  majListeJournees();
   toast('Journal du ' + fmtDate(jourDepuisCle(cle).getTime(), false) + ' enregistré.', 'vertf');
 }
 
@@ -3773,10 +3849,14 @@ function brancher(){
     if (e.key === 'Escape' && !$('#voile').hidden) fermerModale();
   });
 
-  // coller une capture dans le detail d'un trade
+  // Ctrl+V : la photo va dans la fenetre ouverte s'il y en a une,
+  // sinon dans la journee affichee quand on est sur le Journal quotidien.
   document.addEventListener('paste', function(e){
     var m = $('#modale');
-    if ($('#voile').hidden || !m._ajouterImages) return;
+    var deposer = null;
+    if (!$('#voile').hidden && m._ajouterImages) deposer = m._ajouterImages;
+    else if ($('#voile').hidden && E.ecran === 'journal' && photosJournal) deposer = photosJournal.ajouter;
+    if (!deposer) return;
     var items = (e.clipboardData && e.clipboardData.items) || [];
     if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
       var aDesImages = false;
@@ -3790,7 +3870,7 @@ function brancher(){
         if (f) fichiers.push(f);
       }
     }
-    if (fichiers.length) { e.preventDefault(); m._ajouterImages(fichiers); }
+    if (fichiers.length) { e.preventDefault(); deposer(fichiers); }
   });
 
   // infobulles des graphiques et du calendrier

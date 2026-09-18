@@ -90,6 +90,23 @@ vraiment à quelque chose :
 - **Note d'exécution de 1 à 5** : c'est une note sur *ta discipline*, pas sur le résultat
   en argent. Un trade gagnant peut mériter 1 étoile.
 
+## 4 bis. Les photos de la journée
+
+Les photos qui ne sont pas liées à un trade précis vont dans l'onglet **Journal quotidien**,
+carte **Photos de la journée**, sous le biais et le bilan. C'est l'endroit pour le graphique
+du matin, tes niveaux tracés, une photo de ton plan sur papier.
+
+Mêmes trois façons de les mettre : le bouton **📷 Ajouter des photos**, **Ctrl+V** n'importe où
+sur la page (même pendant que tu écris ton bilan, le texte n'est pas touché), ou glisser
+l'image dans le cadre.
+
+Elles suivent la date affichée en haut de la page : change de jour, tu changes de pile de
+photos. On les retrouve aussi en cliquant un jour dans le **Calendrier**, et la liste
+« Journées déjà écrites » affiche 📷 avec leur nombre.
+
+Les photos d'un trade précis restent dans le détail du trade. Les deux sont sauvegardées
+ensemble dans le fichier JSON.
+
 ## 5. La sauvegarde — à lire
 
 Les données vivent dans le navigateur (IndexedDB), pas dans un fichier que tu peux copier.
