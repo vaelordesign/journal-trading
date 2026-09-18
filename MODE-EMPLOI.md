@@ -63,8 +63,26 @@ Tout symbole inconnu est traité à 1 $ le point, ce qui est juste pour les acti
 Clic sur une ligne dans **Trades** pour ouvrir le détail. C'est là que le journal sert
 vraiment à quelque chose :
 
-- **Ctrl+V** colle directement une capture d'écran du presse-papiers. Autant que tu veux,
-  avant et après. (Tu peux aussi glisser un fichier image.)
+- **Les photos du trade.** Trois façons, elles marchent toutes :
+  - le bouton bleu **📷 Photos** en haut de la fenêtre, toujours visible. Sur le téléphone il
+    propose l'appareil photo ou la galerie, sur l'ordinateur il ouvre l'explorateur de fichiers.
+    Tu peux en sélectionner plusieurs d'un coup ;
+  - **Ctrl+V** pour coller une capture d'écran directement depuis le presse-papiers ;
+  - glisser l'image dans le cadre en bas de la fenêtre.
+
+  Autant de photos que tu veux, avant et après. Clic sur une vignette pour la voir en grand,
+  la petite croix l'efface. Les photos sont enregistrées tout de suite, sans attendre
+  le bouton Enregistrer.
+
+  Une photo prise au téléphone pèse plusieurs mégaoctets : elle est automatiquement
+  redessinée à 2200 pixels de large, ce qui la rend dix fois plus légère sans qu'un
+  graphique devienne illisible. Une capture d'écran normale n'est pas touchée du tout.
+  Le poids total des photos, et celui que fera ta sauvegarde, sont affichés dans Réglages.
+
+  Si une photo vient d'un iPhone en format **HEIC**, le navigateur ne sait pas l'afficher :
+  le journal la refuse avec un message au lieu de la garder sans pouvoir la montrer.
+  Dans les réglages de l'iPhone, Appareil photo → Formats → « Le plus compatible » règle ça
+  une fois pour toutes.
 - **Stop prévu** et **cible prévue** : c'est ce qui permet de calculer ton risque en dollars,
   ton R planifié et ton R obtenu. Sans ça, la colonne R reste vide.
 - **Étiquettes** : les étiquettes ICT sont préréglées, tu ajoutes les tiennes.

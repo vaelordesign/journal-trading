@@ -258,11 +258,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .modale.large{max-width:1200px}
 .modale.petite{max-width:520px}
 .modale-entete{
-  display:flex;align-items:center;gap:10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:13px 16px;border-bottom:1px solid var(--bord);
   position:sticky;top:0;background:var(--fond2);border-radius:14px 14px 0 0;z-index:3;
 }
-.modale-entete h2{margin:0}
+.modale-entete h2{margin:0;min-width:0;overflow-wrap:break-word}
 .modale-corps{padding:16px}
 .modale-pied{
   display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;
@@ -1518,6 +1518,7 @@ function toast(msg, type){
 /* ---------- modale ---------- */
 function modale(titre, corpsHtml, piedHtml, taille){
   var v = $('#voile'), m = $('#modale');
+  m._ajouterImages = null;   // voir fermerModale : on ne colle jamais sur l'ecran precedent
   m.className = 'modale' + (taille ? ' ' + taille : '');
   m.innerHTML =
     '<div class="modale-entete"><h2>' + titre + '</h2>' +
@@ -1530,6 +1531,9 @@ function modale(titre, corpsHtml, piedHtml, taille){
 }
 function fermerModale(){
   $('#voile').hidden = true;
+  // sans cette ligne, une image collee plus tard, dans une autre fenetre,
+  // irait se ranger sur le dernier trade ouvert.
+  $('#modale')._ajouterImages = null;
   $('#modale').innerHTML = '';
   document.body.style.overflow = '';
 }
@@ -2411,11 +2415,14 @@ async function ouvrirTrade(cle){
     '</div>' +
   '</div>' +
 
-  '<h4 style="margin-top:6px">Captures d\'écran <span class="gris" style="text-transform:none;letter-spacing:0">avant / après, autant que tu veux</span></h4>' +
+  '<h4 style="margin-top:6px">Photos du trade <span class="gris" style="text-transform:none;letter-spacing:0">avant / après, autant que tu veux</span></h4>' +
   '<div class="galerie" id="tdGalerie"></div>' +
   '<div class="zone-coller" id="tdZoneColler">' +
-    '<b>Ctrl+V</b> pour coller une capture depuis le presse-papiers, ou glisse une image ici, ou ' +
-    '<button class="pt" id="tdChoisirImg">choisis un fichier</button>' +
+    '<button class="primaire" id="tdChoisirImg">&#128247;&nbsp; Ajouter des photos</button>' +
+    '<div class="petit gris" style="margin-top:8px">' +
+      'Sur téléphone, ce bouton ouvre l\'appareil photo ou la galerie. ' +
+      'Sur ordinateur, tu peux aussi faire <b>Ctrl+V</b> pour coller une capture, ou glisser l\'image ici.' +
+    '</div>' +
     '<input type="file" id="tdFichierImg" accept="image/*" multiple hidden>' +
   '</div>';
 
@@ -2527,20 +2534,42 @@ async function ouvrirTrade(cle){
   await majGalerie();
 
   async function ajouterImages(fichiers){
-    var n = 0;
+    var n = 0, gagne = 0, refuses = [];
+    var bouton = $('#tdChoisirImg');
+    if (bouton) { bouton.disabled = true; bouton.textContent = 'Ajout en cours...'; }
     for (var i = 0; i < fichiers.length; i++) {
       var f = fichiers[i];
-      if (!f || !f.type || f.type.indexOf('image/') !== 0) continue;
+      if (!f) continue;
+      if (f.type && f.type.indexOf('image/') !== 0) { refuses.push((f.name || 'fichier') + ' n\'est pas une image'); continue; }
+      var prep = await preparerImage(f);
+      if (prep.illisible) { refuses.push((f.name || 'photo') + ' : format que le navigateur ne sait pas afficher (HEIC de l\'iPhone ?), convertis-la en JPEG'); continue; }
       await dbMettre('images', {
-        id: uid(), parent: 'trade:' + cle, blob: f,
-        nom: f.name || ('capture ' + fmtDate(Date.now())), type: f.type, date: Date.now()
+        id: uid(), parent: 'trade:' + cle, blob: prep.blob,
+        nom: prep.nom, type: prep.blob.type, date: Date.now(),
+        largeur: prep.largeur || null, hauteur: prep.hauteur || null
       });
+      if (prep.gagne) gagne += prep.gagne;
       n++;
     }
-    if (n) { await majGalerie(); await dbMettre('trades', nettoyerPourDb(t)); toast(n + ' image(s) ajoutée(s).', 'vertf'); }
+    if (bouton) { bouton.disabled = false; bouton.innerHTML = '&#128247;&nbsp; Ajouter des photos'; }
+    if (n) {
+      await majGalerie();
+      await dbMettre('trades', nettoyerPourDb(t));
+      $('#tdGalerie').scrollIntoView({ block: 'nearest' });
+      toast(n + ' photo' + (n > 1 ? 's' : '') + ' ajoutée' + (n > 1 ? 's' : '') +
+        (gagne > 1024 ? ' <span class="gris">(allégées de ' + fmtOctets(gagne) + ')</span>' : ''), 'vertf');
+    }
+    if (refuses.length) toast(refuses.join('<br>'), 'rougef');
     return n;
   }
   m._ajouterImages = ajouterImages;
+  // bouton toujours visible en haut de la fenetre, meme quand on a defile
+  var btnHaut = document.createElement('button');
+  btnHaut.className = 'primaire pt';
+  btnHaut.innerHTML = '&#128247;&nbsp; Photos';
+  btnHaut.title = 'Ajouter des photos a ce trade';
+  btnHaut.onclick = function(){ $('#tdFichierImg').click(); };
+  $('.modale-entete', m).insertBefore(btnHaut, $('.modale-entete .fermer', m));
   $('#tdChoisirImg', m).onclick = function(){ $('#tdFichierImg').click(); };
   $('#tdFichierImg', m).onchange = function(e){ ajouterImages(e.target.files); e.target.value = ''; };
   var zc = $('#tdZoneColler', m);
@@ -2593,6 +2622,45 @@ function nettoyerPourDb(t){
   delete c.playbookRegles;
   return c;
 }
+/* Une photo de telephone pese 3 a 8 Mo. Stockee telle quelle, elle gonfle d'autant
+   la sauvegarde JSON, et de 33 % de plus une fois convertie en base64 : 20 photos
+   suffiraient a faire un fichier de 150 Mo. On redessine donc les grandes images a
+   2200 px de large au maximum, ce qui reste tres lisible pour un graphique.
+   Une image deja petite ou legere n'est pas touchee du tout : pas de perte inutile.
+   Si la conversion ne fait rien gagner, on garde l'original. */
+var LARGEUR_MAX_IMAGE = 2200;
+var TAILLE_MAX_IMAGE = 1.2 * 1024 * 1024;
+
+async function preparerImage(f){
+  var bmp = null;
+  try { bmp = await createImageBitmap(f); }
+  catch (e) { bmp = null; }
+  if (!bmp) return { illisible: true };   // HEIC de l'iPhone, fichier abime...
+  var nom = f.name || ('photo ' + fmtDate(Date.now()));
+  var l = bmp.width, h = bmp.height;
+  if (l <= LARGEUR_MAX_IMAGE && f.size <= TAILLE_MAX_IMAGE) {
+    bmp.close();
+    return { blob: f, nom: nom, largeur: l, hauteur: h };
+  }
+  var r = Math.min(1, LARGEUR_MAX_IMAGE / l);
+  var nl = Math.max(1, Math.round(l * r)), nh = Math.max(1, Math.round(h * r));
+  var c = document.createElement('canvas');
+  c.width = nl; c.height = nh;
+  c.getContext('2d').drawImage(bmp, 0, 0, nl, nh);
+  bmp.close();
+  var reduit = await new Promise(function(res){ c.toBlob(res, 'image/webp', 0.92); });
+  if (!reduit) reduit = await new Promise(function(res){ c.toBlob(res, 'image/jpeg', 0.9); });
+  if (!reduit || reduit.size >= f.size) return { blob: f, nom: nom, largeur: l, hauteur: h };
+  return { blob: reduit, nom: nom, largeur: nl, hauteur: nh, gagne: f.size - reduit.size };
+}
+
+function fmtOctets(o){
+  if (!isFinite(o)) return '--';
+  if (o < 1024) return o + ' o';
+  if (o < 1024 * 1024) return Math.round(o / 1024) + ' Ko';
+  return fmtNombre(o / 1024 / 1024, 1) + ' Mo';
+}
+
 function grandeImage(src){
   var d = document.createElement('div');
   d.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.92);display:grid;place-items:center;padding:12px;cursor:zoom-out';
@@ -3116,14 +3184,18 @@ async function ouvrirNote(id){
     }
     if (fichiers.length) {
       e.preventDefault();
+      var poses = 0;
       for (var k = 0; k < fichiers.length; k++) {
+        var prep = await preparerImage(fichiers[k]);
+        if (prep.illisible) { toast('Format d\'image illisible par le navigateur, convertis-la en JPEG.', 'rougef'); continue; }
         var idImg = uid();
-        await dbMettre('images', { id: idImg, parent: 'note:' + n.id, blob: fichiers[k],
-          nom: fichiers[k].name || 'capture', type: fichiers[k].type, date: Date.now() });
-        var html = '<img data-img="' + idImg + '" src="' + urlBlob(fichiers[k]) + '">';
+        await dbMettre('images', { id: idImg, parent: 'note:' + n.id, blob: prep.blob,
+          nom: prep.nom, type: prep.blob.type, date: Date.now() });
+        var html = '<img data-img="' + idImg + '" src="' + urlBlob(prep.blob) + '">';
         document.execCommand('insertHTML', false, html);
+        poses++;
       }
-      toast(fichiers.length + ' image(s) collée(s).', 'vertf');
+      if (poses) toast(poses + ' image(s) collée(s).', 'vertf');
       return;
     }
     // texte brut seulement : evite d'importer du HTML de site web
@@ -3342,7 +3414,16 @@ function rendreReglages(){
   E.fills.forEach(function(f){ octets += JSON.stringify(f).length; });
   $('#tailleDonnees').textContent = E.fills.length + ' fills, ' + E.trades.length + ' trades, ' +
     E.notes.length + ' note(s) de carnet, ' + Object.keys(E.jours).length + ' journée(s) de journal, ' +
-    E.playbooks.length + ' stratégie(s). Texte : environ ' + Math.round(octets / 1024) + ' Ko, plus les images.';
+    E.playbooks.length + ' stratégie(s). Texte : environ ' + fmtOctets(octets) + '.';
+  // les photos pesent beaucoup plus lourd que le texte : il faut pouvoir les voir venir
+  dbTous('images').then(function(imgs){
+    var poids = imgs.reduce(function(a, i){ return a + (i.blob ? i.blob.size : 0); }, 0);
+    var e = $('#tailleDonnees');
+    if (!e) return;
+    e.textContent += ' ' + imgs.length + ' photo(s) : ' + fmtOctets(poids) + '.' +
+      (poids ? ' La sauvegarde JSON fera environ ' + fmtOctets(octets + poids * 1.37) +
+               ' (les photos y sont encodees en texte, ce qui les alourdit d\'un tiers).' : '');
+  });
 }
 
 /* =======================================================================
