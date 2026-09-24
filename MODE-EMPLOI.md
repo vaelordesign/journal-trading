@@ -107,6 +107,31 @@ photos. On les retrouve aussi en cliquant un jour dans le **Calendrier**, et la 
 Les photos d'un trade précis restent dans le détail du trade. Les deux sont sauvegardées
 ensemble dans le fichier JSON.
 
+## 4 ter. Montrer tes résultats à quelqu'un
+
+Si tu envoies simplement l'adresse du journal à quelqu'un, il verra un journal **vide** :
+tes données sont dans ton navigateur, pas sur le serveur.
+
+Pour lui montrer tes résultats, bouton **🔗 Partager** en haut à droite. Tu choisis la période
+et ce que la personne a le droit de voir, puis tu copies le lien.
+
+Ce que le lien contient par défaut : tes chiffres, ta courbe de capital, ton profit par jour,
+tes étiquettes et la liste des trades. Ce qu'il **ne contient pas** sauf si tu coches la case :
+ce que tu as écrit dans chaque trade, et ton journal quotidien. Tes photos ne partent jamais.
+
+Tu peux aussi cocher **« Cacher les montants en dollars »** : tout est alors converti en
+pourcentage de ton compte, et la taille de ton compte n'est pas dans le lien.
+
+Comment ça marche, et ses deux limites :
+
+- Le lien **transporte lui-même** les données, compressées, dans la partie après le `#`.
+  Cette partie n'est jamais envoyée au serveur, rien n'est publié sur GitHub, et la personne
+  qui ouvre le lien ne touche ni ne voit son propre journal.
+- **Qui a le lien a les données.** Il n'y a pas de mot de passe. Envoie-le à qui tu veux,
+  mais traite-le comme une capture d'écran de ton compte.
+- C'est une **photo figée**. Le rapport ne bougera plus, même quand tu traderas demain.
+  Pour montrer la suite, tu regénères un lien.
+
 ## 5. La sauvegarde — à lire
 
 Les données vivent dans le navigateur (IndexedDB), pas dans un fichier que tu peux copier.

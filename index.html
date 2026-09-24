@@ -349,6 +349,7 @@ svg text{font-family:inherit}
       <label class="pilule-interrupteur" title="Inclure les trades de backtest (simulés) dans les statistiques">
         <input type="checkbox" id="chkSimules"> Inclure le backtest
       </label>
+      <button class="pt" id="btnPartager">&#128279; Partager</button>
       <button class="pt" id="btnSauvegarde">&#128190; Exporter</button>
       <button class="pt" id="btnRestaurer">&#128228; Importer</button>
     </div>
@@ -611,6 +612,9 @@ svg text{font-family:inherit}
     <div id="cmpResultat"></div>
   </section>
 
+  <!-- ============ RAPPORT PARTAGE (lecture seule) ============ -->
+  <section class="ecran" id="ec-rapport"></section>
+
   <!-- ============ REGLAGES ============ -->
   <section class="ecran" id="ec-reglages">
     <h1>Réglages</h1>
@@ -799,14 +803,18 @@ function jourDepuisCle(cle){
   var p = String(cle).split('-');
   return new Date(+p[0], +p[1] - 1, +p[2]);
 }
+// Dans un rapport partage sans montants, tout est deja converti en pourcentage
+// du compte : il suffit de changer l'unite affichee.
+var UNITE_MONTANT = '$';
 function fmtArgent(n, decimales){
   if (n === null || n === undefined || !isFinite(n)) return '--';
   var d = decimales === undefined ? 2 : decimales;
+  if (UNITE_MONTANT === '%' && decimales !== undefined && decimales < 2) d = 2;
   var signe = n < 0 ? '-' : '';
   var abs = Math.abs(n).toFixed(d);
   var parts = abs.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return signe + parts.join(',') + ' $';
+  return signe + parts.join(',') + ' ' + UNITE_MONTANT;
 }
 function fmtNombre(n, d){
   if (n === null || n === undefined || !isFinite(n)) return '--';
@@ -3524,6 +3532,307 @@ function dataUrlVersBlob(u){
   return new Blob([arr], { type: type });
 }
 
+/* =======================================================================
+   PARTAGE : un lien qui transporte les resultats
+
+   Il n'y a aucun serveur : le lien contient lui-meme les donnees, compressees
+   en gzip puis ecrites en base64 dans la partie apres le #. Cette partie n'est
+   JAMAIS envoyee au serveur par le navigateur, elle ne quitte pas la machine
+   de celui qui lit. Rien n'est publie sur GitHub, le depot ne contient pas une
+   ligne de tes trades.
+   En contrepartie : qui a le lien a les donnees, et le lien est une photo
+   figee, il ne se met pas a jour tout seul.
+   ======================================================================= */
+
+function base64urlDepuisOctets(oct){
+  var s = '';
+  for (var i = 0; i < oct.length; i += 8192) {
+    s += String.fromCharCode.apply(null, oct.subarray(i, i + 8192));
+  }
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function octetsDepuisBase64url(s){
+  var b = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b.length % 4) b += '=';
+  var bin = atob(b), oct = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) oct[i] = bin.charCodeAt(i);
+  return oct;
+}
+
+async function encoderPartage(obj){
+  var txt = JSON.stringify(obj);
+  var octets = new TextEncoder().encode(txt);
+  if (typeof CompressionStream === 'undefined') return 'b' + base64urlDepuisOctets(octets);
+  var flux = new Blob([octets]).stream().pipeThrough(new CompressionStream('gzip'));
+  var buf = await new Response(flux).arrayBuffer();
+  return 'g' + base64urlDepuisOctets(new Uint8Array(buf));
+}
+async function decoderPartage(s){
+  var mode = s.charAt(0), oct = octetsDepuisBase64url(s.slice(1));
+  if (mode === 'b') return JSON.parse(new TextDecoder().decode(oct));
+  var flux = new Blob([oct]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(flux).text());
+}
+
+// Les cles sont courtes exprès : chaque caractere compte dans la longueur du lien.
+function construirePartage(o){
+  var liste = E.trades.filter(function(t){
+    if (t.simule && !o.backtest) return false;
+    if (o.debut !== null && t.fermeture < o.debut) return false;
+    if (o.fin !== null && t.fermeture > o.fin) return false;
+    return true;
+  });
+  var div = o.pourcent ? (E.reglages.compte > 0 ? E.reglages.compte / 100 : 1) : 1;
+  var p = {
+    v: 1,
+    c: Date.now(),
+    t: o.titre || 'Résultats de trading',
+    u: o.pourcent ? '%' : '$',
+    d: o.debut, f: o.fin,
+    l: o.liste ? 1 : 0,
+    tr: liste.map(function(t){
+      var x = {
+        s: t.symbole, d: t.sens === 'long' ? 1 : 0, q: t.qte,
+        e: t.prixEntree, x: t.prixSortie,
+        o: t.ouverture, z: t.fermeture,
+        n: arrondiFin(t.net / div), b: arrondiFin(t.brut / div),
+        k: arrondiFin(t.commission / div), r: t.duree, m: t.multiplicateur
+      };
+      if (o.plan && t.stopPrevu) { x.sp = t.stopPrevu; x.cp = t.ciblePrevue || null; }
+      if (o.etiquettes) {
+        if (t.tags && t.tags.length) x.g = t.tags;
+        if (t.playbookRegles) x.p = [t.playbookRegles.nom, t.playbookRegles.cochees, t.playbookRegles.total];
+        if (t.note) x.e2 = t.note;
+      }
+      if (o.notes && t.notes) x.w = t.notes;
+      return x;
+    })
+  };
+  if (o.journal) {
+    p.j = Object.keys(E.jours).filter(function(c){
+      var j = E.jours[c];
+      if (o.debut !== null && jourDepuisCle(c).getTime() < o.debut) return false;
+      if (o.fin !== null && jourDepuisCle(c).getTime() > o.fin) return false;
+      return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim());
+    }).sort().map(function(c){ return [c, E.jours[c].biais || '', E.jours[c].bilan || '']; });
+  }
+  return p;
+}
+
+// Retransforme le paquet en trades que le moteur sait traiter.
+function tradesDepuisPartage(p){
+  return (p.tr || []).map(function(x, i){
+    return {
+      cle: 'r' + i, source: 'partage', simule: false,
+      symbole: x.s, symboleBrut: x.s,
+      sens: x.d ? 'long' : 'short', qte: x.q,
+      prixEntree: x.e, prixSortie: x.x,
+      ouverture: x.o, fermeture: x.z,
+      net: x.n, brut: x.b, commission: x.k,
+      duree: x.r, multiplicateur: x.m,
+      stopPrevu: x.sp || null, ciblePrevue: x.cp || null,
+      tags: x.g || [], note: x.e2 || null, notes: x.w || '',
+      playbookRegles: x.p ? { nom: x.p[0], cochees: x.p[1], total: x.p[2] } : null,
+      regles: {}
+    };
+  });
+}
+
+function formulairePartage(){
+  var corps =
+    '<div class="avis jaunef"><b>À lire avant d\'envoyer.</b> Le lien contient lui-même tes résultats, ' +
+    'il n\'y a aucun serveur et rien n\'est publié sur GitHub. En échange&nbsp;: <b>toute personne qui a le lien ' +
+    'voit les données</b>, et le lien est une photo figée, il ne se mettra pas à jour quand tu traderas demain.</div>' +
+    '<div class="grille g2">' +
+      '<label class="champ"><span>Titre du rapport</span><input id="paTitre" value="Mes résultats de trading"></label>' +
+      '<label class="champ"><span>Période</span><select id="paPeriode">' +
+        '<option value="tout">Tout l\'historique</option>' +
+        '<option value="mois">Ce mois-ci</option>' +
+        '<option value="mois-1">Le mois dernier</option>' +
+        '<option value="30">30 derniers jours</option>' +
+        '<option value="plage">La plage affichée à l\'écran</option>' +
+      '</select></label>' +
+    '</div>' +
+    '<h4>Ce que la personne verra</h4>' +
+    '<div class="etiquettes" style="flex-direction:column;align-items:stretch">' +
+      opt('paListe', 'La liste détaillée de chaque trade', true) +
+      opt('paPlan', 'Mon stop et ma cible prévus (nécessaires pour afficher le R)', true) +
+      opt('paEtq', 'Mes étiquettes, mes stratégies et mes notes d\'exécution', true) +
+      opt('paNotes', 'Ce que j\'ai écrit dans chaque trade', false) +
+      opt('paJournal', 'Mon journal quotidien (biais du matin et bilan du soir)', false) +
+      opt('paBacktest', 'Mes trades de backtest', false) +
+      opt('paPourcent', 'Cacher les montants en dollars, tout montrer en % du compte', false) +
+    '</div>' +
+    '<div id="paResultat"></div>';
+  function opt(id, texte, coche){
+    return '<label class="etq-choix' + (coche ? ' on' : '') + '" style="border-radius:8px;justify-content:flex-start">' +
+      '<input type="checkbox" id="' + id + '"' + (coche ? ' checked' : '') + '>' +
+      '<span style="width:14px;display:inline-block">' + (coche ? '&#10003;' : '&#9744;') + '</span>' + texte + '</label>';
+  }
+  var m = modale('&#128279; Partager mes résultats', corps,
+    '<button data-fermer>Fermer</button><button class="primaire" id="paGenerer">Générer le lien</button>');
+  $$('#modale .etq-choix input').forEach(function(i){
+    i.onchange = function(){
+      i.closest('.etq-choix').classList.toggle('on', i.checked);
+      $('span', i.closest('.etq-choix')).innerHTML = i.checked ? '&#10003;' : '&#9744;';
+    };
+  });
+
+  $('#paGenerer', m).onclick = async function(){
+    var per = $('#paPeriode').value, debut = null, fin = null;
+    var auj = new Date(), a = auj.getFullYear(), mo = auj.getMonth();
+    if (per === 'mois') { debut = debutJour(new Date(a, mo, 1)); fin = finJour(new Date(a, mo + 1, 0)); }
+    else if (per === 'mois-1') { debut = debutJour(new Date(a, mo - 1, 1)); fin = finJour(new Date(a, mo, 0)); }
+    else if (per === '30') { fin = finJour(auj); debut = debutJour(new Date(fin - 29 * 86400000)); }
+    else if (per === 'plage') { debut = E.plage.debut; fin = E.plage.fin; }
+    var o = {
+      titre: $('#paTitre').value.trim() || 'Mes résultats de trading',
+      debut: debut, fin: fin,
+      liste: $('#paListe').checked, plan: $('#paPlan').checked,
+      etiquettes: $('#paEtq').checked, notes: $('#paNotes').checked,
+      journal: $('#paJournal').checked, backtest: $('#paBacktest').checked,
+      pourcent: $('#paPourcent').checked
+    };
+    if (o.pourcent && !(E.reglages.compte > 0)) {
+      toast('Renseigne la taille du compte dans Réglages pour pouvoir tout afficher en pourcentage.', 'rougef');
+      return;
+    }
+    var paquet = construirePartage(o);
+    if (!paquet.tr.length) { toast('Aucun trade sur cette période.', 'rougef'); return; }
+    var code = await encoderPartage(paquet);
+    var base = location.href.split('#')[0];
+    var lien = base + '#rapport=' + code;
+    var ko = Math.round(lien.length / 1024);
+    $('#paResultat').innerHTML =
+      '<h4 style="margin-top:14px">Ton lien</h4>' +
+      '<textarea id="paLien" rows="4" readonly style="font-family:monospace;font-size:11px">' + ech(lien) + '</textarea>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
+        '<button class="primaire" id="paCopier">Copier le lien</button>' +
+        '<button id="paVoir">Voir ce que la personne verra</button>' +
+      '</div>' +
+      '<div class="petit gris" style="margin-top:8px">' + paquet.tr.length + ' trade(s) dans le lien, ' +
+        fmtNombre(lien.length, 0) + ' caractères (' + ko + ' Ko).</div>' +
+      (lien.length > 20000 ? '<div class="avis jaunef" style="margin-top:8px">Ce lien est long. ' +
+        'Le courriel le passe sans problème, mais certaines messageries coupent les liens très longs. ' +
+        'Si la personne tombe sur une page vide, raccourcis la période ou décoche la liste détaillée.</div>' : '');
+    $('#paCopier').onclick = async function(){
+      var ok = false;
+      try { await navigator.clipboard.writeText(lien); ok = true; } catch (e) {}
+      if (!ok) {
+        var z = $('#paLien'); z.focus(); z.select();
+        try { ok = document.execCommand('copy'); } catch (e) {}
+      }
+      toast(ok ? 'Lien copié.' : 'Copie refusée par le navigateur, sélectionne le texte à la main.', ok ? 'vertf' : 'rougef');
+    };
+    $('#paVoir').onclick = function(){ window.open(lien, '_blank'); };
+  };
+}
+
+/* ---------- affichage d'un rapport recu ---------- */
+async function afficherRapport(code){
+  var p;
+  try { p = await decoderPartage(code); }
+  catch (e) {
+    document.body.innerHTML = '<div class="avis rougef" style="margin:20px">Ce lien de rapport est abîmé ou incomplet. ' +
+      'Il a probablement été coupé par la messagerie. Demande qu\'on te le renvoie par courriel.</div>';
+    return;
+  }
+  UNITE_MONTANT = p.u === '%' ? '%' : '$';
+  var trades = tradesDepuisPartage(p);
+  var s = statsDeTrades(trades);
+  var ng = noteGlobale(trades, s, {});
+  var jours = Object.keys(s.jours).sort().map(function(c){ return s.jours[c]; });
+  E.pointsCourbe = s.courbe;
+  E.pointsJours = jours;
+
+  // on cache tout ce qui sert a travailler : ce mode est une consultation
+  $('#nav').style.display = 'none';
+  $('.entete-droite').style.display = 'none';
+  $('#bandeau').style.display = 'none';
+  $$('.ecran').forEach(function(x){ x.classList.remove('actif'); });
+  var r = $('#ec-rapport');
+  r.classList.add('actif');
+
+  var periode = (p.d ? fmtDate(p.d, false) : fmtDate(s.courbe[0] ? s.courbe[0].t : p.c, false)) + ' au ' +
+                (p.f ? fmtDate(p.f, false) : fmtDate(s.courbe.length ? s.courbe[s.courbe.length - 1].t : p.c, false));
+  var parSymbole = grouper(trades, function(t){ return t.symbole; });
+  var parEtq = grouper(trades, function(t){ return (t.tags && t.tags.length) ? t.tags : null; });
+
+  r.innerHTML =
+    '<div class="carte">' +
+      '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">' +
+        '<h1 style="margin:0">' + ech(p.t) + '</h1>' +
+        '<span class="puce a">lecture seule</span>' +
+        '<span class="petit gris" style="margin-left:auto">rapport figé, généré le ' + fmtDate(p.c) + '</span>' +
+      '</div>' +
+      '<div class="petit gris" style="margin-top:6px">Période : ' + periode + ' &middot; ' + s.nb + ' trades' +
+      (p.u === '%' ? ' &middot; montants exprimés en pourcentage du compte' : '') + '</div>' +
+    '</div>' +
+    '<div class="grille g4" style="margin-bottom:14px">' +
+      chiffre('Profit net total', signe(s.net), s.nb + ' trades clôturés', cls(s.net)) +
+      chiffre('Taux de réussite', s.tauxReussite === null ? '--' : fmtNombre(s.tauxReussite * 100, 1) + ' %',
+        s.nbG + ' gagnants / ' + s.nbP + ' perdants') +
+      chiffre('Facteur de profit', s.facteurProfit === null ? '--' :
+        (s.facteurProfit === Infinity ? 'infini' : fmtNombre(s.facteurProfit, 2)),
+        fmtArgent(s.gains, 0) + ' de gains contre ' + fmtArgent(s.pertes, 0) + ' de pertes',
+        s.facteurProfit !== null && s.facteurProfit >= 1 ? 'vert' : 'rouge') +
+      chiffre('Profit moyen par trade', s.moyenne === null ? '--' : signe(s.moyenne),
+        s.moyenneR === null ? '' : 'R moyen ' + fmtNombre(s.moyenneR, 2) + ' R', cls(s.moyenne)) +
+    '</div>' +
+    '<div class="grille g2">' +
+      '<div class="carte"><h3>Note globale <span class="petit gris">sur 100</span></h3>' + blocNote(ng) + '</div>' +
+      '<div class="carte"><h3>Chiffres clés</h3><div class="tableau-boite" style="border:0"><table class="auto"><tbody>' +
+        ligneInfo('Trades', fmtNombre(s.nb, 0)) +
+        ligneInfo('Journées tradées', fmtNombre(s.nbJours, 0) + ' (' + s.nbJoursG + ' vertes / ' + s.nbJoursP + ' rouges)') +
+        ligneInfo('Gain moyen', '<span class="vert">' + (s.moyenneGain === null ? '--' : fmtArgent(s.moyenneGain)) + '</span>') +
+        ligneInfo('Perte moyenne', '<span class="rouge">' + (s.moyennePerte === null ? '--' : fmtArgent(-s.moyennePerte)) + '</span>') +
+        ligneInfo('Gain moyen / perte moyenne', s.ratioGainPerte === null ? '--' : fmtNombre(s.ratioGainPerte, 2)) +
+        ligneInfo('Plus gros gain', '<span class="vert">' + fmtArgent(s.plusGrosGain) + '</span>') +
+        ligneInfo('Plus grosse perte', '<span class="rouge">' + fmtArgent(s.plusGrossePerte) + '</span>') +
+        ligneInfo('Meilleure journée', s.meilleurJour ? fmtArgent(s.meilleurJour.net) : '--') +
+        ligneInfo('Pire journée', s.pireJour ? fmtArgent(s.pireJour.net) : '--') +
+        ligneInfo('Recul maximal du capital', '<span class="rouge">' + fmtArgent(-s.ddMax) + '</span>') +
+        ligneInfo('Série de gains la plus longue', s.serieGMax) +
+        ligneInfo('Série de pertes la plus longue', s.seriePMax) +
+        ligneInfo('Durée moyenne d\'un trade', fmtDuree(s.dureeMoyenne)) +
+      '</tbody></table></div></div>' +
+    '</div>' +
+    '<div class="carte"><h3>Capital cumulé</h3>' + svgCourbe(s.courbe, 'rap') + '</div>' +
+    '<div class="carte"><h3>Profit par jour</h3>' + svgBarresJours(jours, 'rapj') + '</div>' +
+    '<div class="carte"><h3>Par symbole</h3>' + tableauGroupes(parSymbole, 'Symbole') + '</div>' +
+    (parEtq.length ? '<div class="carte"><h3>Par étiquette</h3>' + tableauGroupes(parEtq, 'Étiquette') + '</div>' : '') +
+    (p.l ? '<div class="carte"><h3>Les trades un par un</h3>' + tableauTrades(trades, !trades.some(function(t){ return t.tags && t.tags.length; })) + '</div>' : '') +
+    (p.j && p.j.length ? '<div class="carte"><h3>Journal quotidien</h3>' + p.j.map(function(j){
+      return '<div style="border-bottom:1px solid var(--bord);padding:10px 0">' +
+        '<div class="gras">' + fmtJourLong(j[0]) + '</div>' +
+        (j[1] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Biais du matin : </b>' + ech(j[1]) + '</div>' : '') +
+        (j[2] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Bilan du soir : </b>' + ech(j[2]) + '</div>' : '') +
+        '</div>';
+    }).join('') + '</div>' : '') +
+    '<div class="carte centre">' +
+      '<div class="petit gris" style="margin-bottom:10px">Rapport en lecture seule, produit par Journal de trading. ' +
+      'Les données voyagent dans le lien, elles ne sont stockées sur aucun serveur.</div>' +
+      '<button class="primaire" id="rapMien">Ouvrir mon propre journal, vide</button>' +
+    '</div>';
+  $('#rapMien').onclick = function(){ location.href = location.href.split('#')[0]; };
+  // les notes ecrites sur chaque trade, si elles ont ete partagees
+  if (p.l) {
+    $$('#ec-rapport tr[data-cle]').forEach(function(tr){
+      var t = trades.filter(function(x){ return x.cle === tr.dataset.cle; })[0];
+      tr.classList.remove('clic');
+      if (t && t.notes) {
+        tr.title = t.notes;
+        tr.classList.add('clic');
+        tr.onclick = function(){
+          modale(ech(t.symbole) + ' ' + (t.sens === 'long' ? 'Long' : 'Short') + ' <span class="' + cls(t.net) + '">' + signe(t.net) + '</span>',
+            '<div style="white-space:pre-wrap">' + ech(t.notes) + '</div>', '<button data-fermer>Fermer</button>', 'petite');
+        };
+      }
+    });
+  }
+  document.title = p.t;
+}
+
 // Construit le paquet complet de sauvegarde. Les images sont converties en
 // base64 UNIQUEMENT ici, pour tenir dans un seul fichier JSON : dans la base
 // elles restent des blobs.
@@ -3831,6 +4140,7 @@ function brancher(){
   };
 
   // sauvegarde
+  $('#btnPartager').onclick = formulairePartage;
   $('#btnSauvegarde').onclick = function(){ exporterTout(true); };
   $('#btnExport2').onclick = function(){ exporterTout(true); };
   $('#btnExportLeger').onclick = function(){ exporterTout(false); };
@@ -3907,6 +4217,11 @@ function brancher(){
 }
 
 async function demarrer(){
+  // Mode rapport partage : on n'ouvre meme pas la base. Le journal de la
+  // personne qui recoit le lien n'est ni lu, ni touche, ni ecrase.
+  if ((location.hash || '').indexOf('#rapport=') === 0) {
+    return afficherRapport(location.hash.slice(9));
+  }
   try {
     DB = await ouvrirDB();
   } catch (e) {
