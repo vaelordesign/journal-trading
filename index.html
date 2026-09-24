@@ -1537,6 +1537,10 @@ var CHAMPS_ANNOTATION = ['stopPrevu', 'ciblePrevue', 'notes', 'tags', 'note',
 // bloc photos de l'ecran Journal quotidien, pour que Ctrl+V sache ou deposer
 var photosJournal = null;
 
+// vrai quand la page est un rapport ou un profil : on n'affiche alors pas les
+// petites consignes que Julien s'adresse a lui-meme, comme "a remplir".
+var MODE_RAPPORT = false;
+
 /* =======================================================================
    OUTILS DOM
    ======================================================================= */
@@ -2392,7 +2396,7 @@ function ligneTrade(compact, t){
       '<td>' + (t.tags && t.tags.length
         ? t.tags.slice(0, 3).map(function(x){ return '<span class="puce">' + ech(x) + '</span>'; }).join(' ') +
           (t.tags.length > 3 ? ' <span class="gris mini">+' + (t.tags.length - 3) + '</span>' : '')
-        : (t.nbImages ? '' : '<span class="gris mini">a remplir</span>')) +
+        : ((t.nbImages || MODE_RAPPORT) ? '' : '<span class="gris mini">à remplir</span>')) +
         (t.nbImages ? ' <span class="puce a">' + t.nbImages + ' image(s)</span>' : '') +
         (t.playbookRegles ? ' <span class="puce a">' + ech(t.playbookRegles.nom) + '</span>' : '') + '</td>') +
     '</tr>';
@@ -3906,6 +3910,7 @@ async function afficherRapportDepuisLien(code){
 /* ---------- rendu commun : lien figé ET profil public ---------- */
 async function afficherRapport(p, o){
   o = o || {};
+  MODE_RAPPORT = true;
   UNITE_MONTANT = p.u === '%' ? '%' : '$';
   var trades = tradesDepuisPartage(p);
   var s = statsDeTrades(trades);
