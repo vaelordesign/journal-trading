@@ -2199,32 +2199,28 @@ function rendreAlertesRisque(s, trades){
 
 /* =======================================================================
    ECRAN 3 : CALENDRIER
+   La grille est fabriquee par une fonction a part : l'ecran Calendrier et le
+   profil public s'en servent tous les deux, il n'y a donc qu'un seul code.
    ======================================================================= */
-function rendreCalendrier(){
-  var d = E.calMois;
-  var an = d.getFullYear(), mois = d.getMonth();
-  $('#calTitre').textContent = MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an;
+function nomsJoursHtml(){
+  return ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+    .map(function(n){ return '<div class="cal-jour-nom">' + n + '</div>'; }).join('');
+}
 
-  var tous = tousLesTradesReels();
-  var duMois = tous.filter(function(t){
-    var f = new Date(t.fermeture);
-    return f.getFullYear() === an && f.getMonth() === mois;
-  });
-  var sMois = statsDeTrades(duMois);
-  var infra = joursEnInfraction(sMois, E.reglages, duMois);
-
-  var noms = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-  $('#calNoms').innerHTML = noms.map(function(n){ return '<div class="cal-jour-nom">' + n + '</div>'; }).join('');
-
+// sMois : statsDeTrades des trades du mois. infra et notes sont facultatifs
+// (le profil public ne montre ni les limites de risque ni le journal ecrit).
+function grilleCalendrierHtml(sMois, an, mois, infra, notes){
+  infra = infra || {};
+  notes = notes || {};
   var premier = new Date(an, mois, 1);
-  var decalage = (premier.getDay() + 6) % 7; // lundi en premier
+  var decalage = (premier.getDay() + 6) % 7;   // lundi en premier
   var nbJours = new Date(an, mois + 1, 0).getDate();
   var cases = [];
   for (var i = 0; i < decalage; i++) cases.push('<div class="cal-case hors"></div>');
   for (var j = 1; j <= nbJours; j++) {
     var cle = an + '-' + String(mois + 1).padStart(2, '0') + '-' + String(j).padStart(2, '0');
     var jour = sMois.jours[cle];
-    var note = E.jours[cle];
+    var note = notes[cle];
     var aNote = note && ((note.biais && note.biais.trim()) || (note.bilan && note.bilan.trim()));
     var c = 'cal-case actif';
     if (jour) c += jour.net > 0 ? ' g' : (jour.net < 0 ? ' p' : '');
@@ -2239,7 +2235,24 @@ function rendreCalendrier(){
       '</div>');
   }
   while (cases.length % 7 !== 0) cases.push('<div class="cal-case hors"></div>');
-  $('#calGrille').innerHTML = cases.join('');
+  return cases.join('');
+}
+
+function rendreCalendrier(){
+  var d = E.calMois;
+  var an = d.getFullYear(), mois = d.getMonth();
+  $('#calTitre').textContent = MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an;
+
+  var tous = tousLesTradesReels();
+  var duMois = tous.filter(function(t){
+    var f = new Date(t.fermeture);
+    return f.getFullYear() === an && f.getMonth() === mois;
+  });
+  var sMois = statsDeTrades(duMois);
+  var infra = joursEnInfraction(sMois, E.reglages, duMois);
+
+  $('#calNoms').innerHTML = nomsJoursHtml();
+  $('#calGrille').innerHTML = grilleCalendrierHtml(sMois, an, mois, infra, E.jours);
 
   $('#calResume').innerHTML = sMois.nb
     ? '<span class="' + cls(sMois.net) + ' gras">' + signe(sMois.net) + '</span> sur ' + sMois.nb + ' trades, ' +
@@ -3957,6 +3970,16 @@ async function afficherRapport(p, o){
       '</tbody></table></div></div>' +
     '</div>' +
     '<div class="carte"><h3>Capital cumulé</h3>' + svgCourbe(s.courbe, 'rap') + '</div>' +
+    '<div class="carte">' +
+      '<div class="cal-entete">' +
+        '<button class="pt" id="rapCalPrec">&larr;</button>' +
+        '<h3 id="rapCalTitre" style="margin:0;min-width:170px;text-align:center"></h3>' +
+        '<button class="pt" id="rapCalSuiv">&rarr;</button>' +
+        '<div class="petit gris" id="rapCalResume" style="margin-left:auto"></div>' +
+      '</div>' +
+      '<div class="cal-grille" id="rapCalNoms"></div>' +
+      '<div class="cal-grille" id="rapCalGrille" style="margin-top:5px"></div>' +
+    '</div>' +
     '<div class="carte"><h3>Profit par jour</h3>' + svgBarresJours(jours, 'rapj') + '</div>' +
     '<div class="carte"><h3>Par symbole</h3>' + tableauGroupes(parSymbole, 'Symbole') + '</div>' +
     (parEtq.length ? '<div class="carte"><h3>Par étiquette</h3>' + tableauGroupes(parEtq, 'Étiquette') + '</div>' : '') +
@@ -3977,6 +4000,47 @@ async function afficherRapport(p, o){
         (o.source === 'profil' ? 'Ouvrir le journal' : 'Ouvrir mon propre journal, vide') + '</button>' +
     '</div>';
   $('#rapMien').onclick = function(){ location.href = location.href.split('#')[0] + '#bord'; location.reload(); };
+
+  // ---------- calendrier du rapport ----------
+  // On ne se promene qu'entre le premier et le dernier mois qui contiennent un trade.
+  var dates = trades.map(function(t){ return t.fermeture; });
+  var premierMois = new Date(Math.min.apply(null, dates));
+  var dernierMois = new Date(Math.max.apply(null, dates));
+  var borneMin = premierMois.getFullYear() * 12 + premierMois.getMonth();
+  var borneMax = dernierMois.getFullYear() * 12 + dernierMois.getMonth();
+  var courant = borneMax;
+  $('#rapCalNoms').innerHTML = nomsJoursHtml();
+
+  function dessinerMois(){
+    var an = Math.floor(courant / 12), mois = courant % 12;
+    var duMois = trades.filter(function(t){
+      var f = new Date(t.fermeture);
+      return f.getFullYear() === an && f.getMonth() === mois;
+    });
+    var sm = statsDeTrades(duMois);
+    $('#rapCalTitre').textContent = MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an;
+    $('#rapCalGrille').innerHTML = grilleCalendrierHtml(sm, an, mois, null, null);
+    $('#rapCalResume').innerHTML = sm.nb
+      ? '<span class="' + cls(sm.net) + ' gras">' + signe(sm.net) + '</span> sur ' + sm.nb + ' trades, ' +
+        sm.nbJoursG + ' journée(s) verte(s) et ' + sm.nbJoursP + ' rouge(s)'
+      : 'aucun trade ce mois-ci';
+    $('#rapCalPrec').disabled = courant <= borneMin;
+    $('#rapCalSuiv').disabled = courant >= borneMax;
+    // clic sur un jour : la liste des trades de ce jour, en lecture seule
+    $$('#rapCalGrille [data-jour]').forEach(function(c){
+      var duJour = duMois.filter(function(t){ return cleJour(t.fermeture) === c.dataset.jour; });
+      if (!duJour.length) { c.classList.remove('actif'); return; }
+      c.onclick = function(){
+        var sj = statsDeTrades(duJour);
+        modale(fmtJourLong(c.dataset.jour) + ' <span class="' + cls(sj.net) + '">' + signe(sj.net) + '</span>',
+          tableauTrades(duJour.sort(function(a, b){ return a.fermeture - b.fermeture; }), true),
+          '<button data-fermer>Fermer</button>', 'large');
+      };
+    });
+  }
+  $('#rapCalPrec').onclick = function(){ if (courant > borneMin) { courant--; dessinerMois(); } };
+  $('#rapCalSuiv').onclick = function(){ if (courant < borneMax) { courant++; dessinerMois(); } };
+  dessinerMois();
   // les notes ecrites sur chaque trade, si elles ont ete partagees
   if (p.l) {
     $$('#ec-rapport tr[data-cle]').forEach(function(tr){
