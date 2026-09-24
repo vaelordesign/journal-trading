@@ -1,0 +1,25 @@
+# Le forfait gratuit de Supabase endort un projet apres 7 jours sans activite,
+# et un profil public endormi ne s'affiche plus. Cette tache le reveille chaque
+# jour en lisant le profil. La cle ci-dessous est la cle PUBLIQUE, la meme que
+# dans index.html : elle ne permet que de lire un profil.
+name: Garder la base eveillee
+
+on:
+  schedule:
+    - cron: '17 11 * * *'   # tous les jours, 7 h 17 a Montreal
+  workflow_dispatch:
+
+jobs:
+  reveiller:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lire le profil public
+        run: |
+          CODE=$(curl -s -o /tmp/reponse.json -w "%{http_code}" \
+            -X POST "https://mumqsvwiiqynhhxluade.supabase.co/rest/v1/rpc/journal_lire" \
+            -H "apikey: sb_publishable_EtRyFIKVhm6GKAZoAdh2Ng_84acEvNb" \
+            -H "Content-Type: application/json" \
+            -d '{"p_id":"julien"}')
+          echo "HTTP $CODE"
+          head -c 200 /tmp/reponse.json
+          test "$CODE" = "200"

@@ -658,6 +658,43 @@ svg text{font-family:inherit}
     </div>
 
     <div class="carte">
+      <h3>Profil public <span class="petit gris">l'adresse de base du site</span></h3>
+      <div class="petit gris" style="margin-bottom:10px">
+        Tes résultats publiés, en lecture seule, à une adresse qui ne change jamais et qui se met à jour
+        à chaque import. Ton journal de travail, lui, est sur l'adresse qui finit par <b>#bord</b>.
+      </div>
+      <div id="profilEtat"></div>
+      <h4 style="margin-top:14px">Ce qui est publié</h4>
+      <div class="grille g2">
+        <label class="champ"><span>Titre affiché</span><input id="pfTitre"></label>
+        <label class="champ"><span>Période publiée</span><select id="pfPeriode">
+          <option value="tout">Tout l'historique</option>
+          <option value="annee">Cette année</option>
+          <option value="mois">Ce mois-ci</option>
+          <option value="30">30 derniers jours</option>
+        </select></label>
+      </div>
+      <div class="etiquettes" style="flex-direction:column;align-items:stretch" id="pfOptions"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="primaire" id="pfPublier">Publier maintenant</button>
+        <button id="pfVoir">Voir mon profil</button>
+        <button id="pfCopier">Copier l'adresse</button>
+        <label class="pilule-interrupteur"><input type="checkbox" id="pfAuto"> Publier tout seul après chaque import</label>
+      </div>
+      <details style="margin-top:12px">
+        <summary class="petit gris" style="cursor:pointer">Clé de publication (à garder)</summary>
+        <div class="petit gris" style="margin:8px 0">
+          C'est elle qui empêche n'importe qui d'écraser ton profil. Elle ne sort jamais de ce navigateur
+          autrement que pour être vérifiée, et elle est dans ta sauvegarde JSON. Si tu la perds, préviens-moi.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label class="champ" style="margin:0;flex:1 1 260px"><span>Clé</span><input id="pfCle" type="text"></label>
+          <button id="pfNouvelleCle">En générer une nouvelle</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="carte">
       <h3>Sauvegarde</h3>
       <div class="avis jaunef">C'est ta seule sauvegarde. Le fichier JSON contient tout&nbsp;: fills, trades, notes, playbooks, réglages et les captures d'écran. Garde-le ailleurs que sur ce disque.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1397,6 +1434,19 @@ function joursEnInfraction(stats, reglages, trades){
    ======================================================================= */
 var NOM_DB = 'journal-trading', VERSION_DB = 1, DB = null;
 
+/* ---------------------------------------------------------------
+   PROFIL PUBLIC
+   L'adresse de base du site mene au profil : les resultats publies,
+   en lecture seule. Le journal de travail est sur #journal.
+   La cle ci-dessous est la cle PUBLIQUE de Supabase, elle est faite
+   pour vivre dans une page. Elle ne donne le droit d'appeler que deux
+   fonctions : lire un profil, et en publier un SI on connait la cle de
+   publication, qui elle ne quitte jamais le navigateur de Julien.
+   --------------------------------------------------------------- */
+var SUPA_URL = 'https://mumqsvwiiqynhhxluade.supabase.co';
+var SUPA_CLE = 'sb_publishable_EtRyFIKVhm6GKAZoAdh2Ng_84acEvNb';
+var PROFIL_PUBLIC = 'julien';
+
 function ouvrirDB(){
   return new Promise(function(res, rej){
     var r = indexedDB.open(NOM_DB, VERSION_DB);
@@ -1833,6 +1883,9 @@ function joursTries(stats){
    NAVIGATION ET PLAGE DE DATES
    ======================================================================= */
 var ECRANS_AVEC_PLAGE = { bord: 1, trades: 1, stats: 1, playbooks: 1, regles: 1 };
+// Toute adresse qui n'est pas un de ces ecrans mene au profil public.
+var ECRANS_VALIDES = ['import', 'bord', 'calendrier', 'trades', 'stats', 'playbooks',
+                      'regles', 'journal', 'carnet', 'comparaison', 'reglages'];
 
 function allerA(ecran){
   E.ecran = ecran;
@@ -1981,10 +2034,14 @@ async function lireFichiersCsv(fichiers){
     E.fills = E.fills.concat(E.importEnAttente);
     E.importEnAttente = [];
     await recalculer();
+    var publie = false;
+    if (E.reglages.profilAuto && E.reglages.clePublication) publie = await publierProfil(true);
     $('#resumeImport').innerHTML = '<div class="avis vertf"><b>Import terminé.</b> ' +
-      E.trades.length + ' trades dans le journal.</div>';
+      E.trades.length + ' trades dans le journal.' +
+      (publie ? ' Ton profil public a été mis à jour.' : '') + '</div>';
     rendreImport();
-    toast('Import terminé, ' + E.trades.length + ' trades au total.', 'vertf');
+    toast('Import terminé, ' + E.trades.length + ' trades au total.' +
+      (publie ? ' Profil public à jour.' : ''), 'vertf');
   };
   var ba = $('#btnAnnulerImport');
   if (ba) ba.onclick = function(){ E.importEnAttente = []; $('#resumeImport').innerHTML = ''; };
@@ -3493,6 +3550,8 @@ function rendreReglages(){
     };
   });
 
+  rendreProfilReglages();
+
   var octets = 0;
   E.trades.forEach(function(t){ octets += JSON.stringify(nettoyerPourDb(t)).length; });
   E.fills.forEach(function(f){ octets += JSON.stringify(f).length; });
@@ -3508,6 +3567,97 @@ function rendreReglages(){
       (poids ? ' La sauvegarde JSON fera environ ' + fmtOctets(octets + poids * 1.37) +
                ' (les photos y sont encodees en texte, ce qui les alourdit d\'un tiers).' : '');
   });
+}
+
+/* ---------- carte Profil public dans les Réglages ---------- */
+function adresseProfil(){ return location.href.split('#')[0].split('?')[0]; }
+
+function rendreProfilReglages(){
+  var r = E.reglages;
+  if (!r.clePublication) {
+    // une cle est fabriquee du premier coup : rien a taper pour publier
+    var a = new Uint8Array(16);
+    (crypto.getRandomValues ? crypto : window.crypto).getRandomValues(a);
+    r.clePublication = Array.prototype.map.call(a, function(x){ return ('0' + x.toString(16)).slice(-2); }).join('');
+    dbMettre('reglages', r);
+  }
+  var o = optionsProfil();
+  $('#pfTitre').value = o.titre;
+  $('#pfPeriode').value = o.periode;
+  $('#pfCle').value = r.clePublication;
+  $('#pfAuto').checked = !!r.profilAuto;
+
+  var cases = [
+    ['liste', 'La liste détaillée de chaque trade'],
+    ['plan', 'Mon stop et ma cible prévus (pour afficher le R)'],
+    ['etiquettes', 'Mes étiquettes, mes stratégies et mes notes d\'exécution'],
+    ['notes', 'Ce que j\'ai écrit dans chaque trade'],
+    ['journal', 'Mon journal quotidien (biais du matin et bilan du soir)'],
+    ['backtest', 'Mes trades de backtest'],
+    ['pourcent', 'Cacher les montants en dollars, tout en % du compte']
+  ];
+  $('#pfOptions').innerHTML = cases.map(function(c){
+    var on = !!o[c[0]];
+    return '<label class="etq-choix' + (on ? ' on' : '') + '" style="border-radius:8px;justify-content:flex-start">' +
+      '<input type="checkbox" data-pf="' + c[0] + '"' + (on ? ' checked' : '') + '>' +
+      '<span style="width:14px;display:inline-block">' + (on ? '&#10003;' : '&#9744;') + '</span>' + c[1] + '</label>';
+  }).join('');
+
+  $('#profilEtat').innerHTML = r.profilMaj
+    ? '<div class="avis vertf"><b>En ligne.</b> ' + (r.profilNb || 0) + ' trades publiés, mis à jour le ' +
+      fmtDate(r.profilMaj) + '.<br><span class="petit">' + ech(adresseProfil()) + '</span></div>'
+    : '<div class="avis jaunef">Rien n\'est encore publié. Tant que tu ne publies pas, l\'adresse de base ouvre ' +
+      'ton journal comme avant.<br><span class="petit">' + ech(adresseProfil()) + '</span></div>';
+
+  var enr = async function(){
+    var p = E.reglages.profil || {};
+    p.titre = $('#pfTitre').value.trim() || 'Mes résultats de trading';
+    p.periode = $('#pfPeriode').value;
+    $$('#pfOptions input[data-pf]').forEach(function(i){ p[i.dataset.pf] = i.checked; });
+    E.reglages.profil = p;
+    await dbMettre('reglages', E.reglages);
+  };
+  $('#pfTitre').onchange = enr;
+  $('#pfPeriode').onchange = enr;
+  $$('#pfOptions input[data-pf]').forEach(function(i){
+    i.onchange = async function(){
+      i.closest('.etq-choix').classList.toggle('on', i.checked);
+      $('span', i.closest('.etq-choix')).innerHTML = i.checked ? '&#10003;' : '&#9744;';
+      await enr();
+    };
+  });
+  $('#pfCle').onchange = async function(){
+    E.reglages.clePublication = $('#pfCle').value.trim();
+    await dbMettre('reglages', E.reglages);
+  };
+  $('#pfNouvelleCle').onclick = async function(){
+    if (E.reglages.profilMaj && !await confirmer(
+      'Ton profil est déjà publié avec la clé actuelle. Une nouvelle clé ne pourra <b>plus</b> écraser ce profil : ' +
+      'l\'adresse resterait figée sur la dernière publication. À ne faire que si la clé a fuité.', 'Changer quand même')) return;
+    var a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    $('#pfCle').value = Array.prototype.map.call(a, function(x){ return ('0' + x.toString(16)).slice(-2); }).join('');
+    E.reglages.clePublication = $('#pfCle').value;
+    await dbMettre('reglages', E.reglages);
+  };
+  $('#pfAuto').onchange = async function(){
+    E.reglages.profilAuto = $('#pfAuto').checked;
+    await dbMettre('reglages', E.reglages);
+    toast(E.reglages.profilAuto ? 'Le profil se mettra à jour après chaque import.' : 'Publication automatique arrêtée.', 'vertf');
+  };
+  $('#pfPublier').onclick = async function(){
+    var b = $('#pfPublier');
+    b.disabled = true; b.textContent = 'Publication...';
+    await enr();
+    await publierProfil(false);
+    b.disabled = false; b.textContent = 'Publier maintenant';
+  };
+  $('#pfVoir').onclick = function(){ window.open(adresseProfil(), '_blank'); };
+  $('#pfCopier').onclick = async function(){
+    var ok = false;
+    try { await navigator.clipboard.writeText(adresseProfil()); ok = true; } catch (e) {}
+    toast(ok ? 'Adresse copiée.' : 'Copie refusée, sélectionne l\'adresse à la main.', ok ? 'vertf' : 'rougef');
+  };
 }
 
 /* =======================================================================
@@ -3728,8 +3878,8 @@ function formulairePartage(){
   };
 }
 
-/* ---------- affichage d'un rapport recu ---------- */
-async function afficherRapport(code){
+/* ---------- affichage d'un rapport recu par lien fige ---------- */
+async function afficherRapportDepuisLien(code){
   var p;
   try { p = await decoderPartage(code); }
   catch (e) {
@@ -3737,6 +3887,12 @@ async function afficherRapport(code){
       'Il a probablement été coupé par la messagerie. Demande qu\'on te le renvoie par courriel.</div>';
     return;
   }
+  return afficherRapport(p, { source: 'lien' });
+}
+
+/* ---------- rendu commun : lien figé ET profil public ---------- */
+async function afficherRapport(p, o){
+  o = o || {};
   UNITE_MONTANT = p.u === '%' ? '%' : '$';
   var trades = tradesDepuisPartage(p);
   var s = statsDeTrades(trades);
@@ -3763,7 +3919,10 @@ async function afficherRapport(code){
       '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">' +
         '<h1 style="margin:0">' + ech(p.t) + '</h1>' +
         '<span class="puce a">lecture seule</span>' +
-        '<span class="petit gris" style="margin-left:auto">rapport figé, généré le ' + fmtDate(p.c) + '</span>' +
+        (o.source === 'profil'
+          ? '<span class="puce v">à jour</span><span class="petit gris" style="margin-left:auto">' +
+            'mis à jour le ' + fmtDate(o.maj) + '</span>'
+          : '<span class="petit gris" style="margin-left:auto">rapport figé, généré le ' + fmtDate(p.c) + '</span>') +
       '</div>' +
       '<div class="petit gris" style="margin-top:6px">Période : ' + periode + ' &middot; ' + s.nb + ' trades' +
       (p.u === '%' ? ' &middot; montants exprimés en pourcentage du compte' : '') + '</div>' +
@@ -3811,10 +3970,13 @@ async function afficherRapport(code){
     }).join('') + '</div>' : '') +
     '<div class="carte centre">' +
       '<div class="petit gris" style="margin-bottom:10px">Rapport en lecture seule, produit par Journal de trading. ' +
-      'Les données voyagent dans le lien, elles ne sont stockées sur aucun serveur.</div>' +
-      '<button class="primaire" id="rapMien">Ouvrir mon propre journal, vide</button>' +
+      (o.source === 'profil'
+        ? 'Cette page se met à jour toute seule quand de nouveaux trades sont publiés.'
+        : 'Les données voyagent dans le lien, elles ne sont stockées sur aucun serveur.') + '</div>' +
+      '<button class="primaire" id="rapMien">' +
+        (o.source === 'profil' ? 'Ouvrir le journal' : 'Ouvrir mon propre journal, vide') + '</button>' +
     '</div>';
-  $('#rapMien').onclick = function(){ location.href = location.href.split('#')[0]; };
+  $('#rapMien').onclick = function(){ location.href = location.href.split('#')[0] + '#bord'; location.reload(); };
   // les notes ecrites sur chaque trade, si elles ont ete partagees
   if (p.l) {
     $$('#ec-rapport tr[data-cle]').forEach(function(tr){
@@ -3831,6 +3993,93 @@ async function afficherRapport(code){
     });
   }
   document.title = p.t;
+}
+
+/* =======================================================================
+   PROFIL PUBLIC : publier vers Supabase, et le lire
+
+   La cle de publication ne quitte jamais ce navigateur : elle part dans
+   l'appel, le serveur en compare l'empreinte SHA-256 et ne la stocke pas en
+   clair. Sans elle, personne ne peut ecraser le profil, meme avec la cle
+   publique qui est dans cette page.
+   ======================================================================= */
+function optionsProfil(){
+  var d = { liste: true, plan: true, etiquettes: true,
+            notes: false, journal: false, backtest: false, pourcent: false,
+            titre: 'Mes résultats de trading', periode: 'tout' };
+  var r = E.reglages.profil || {};
+  Object.keys(d).forEach(function(k){ if (r[k] !== undefined) d[k] = r[k]; });
+  return d;
+}
+
+function bornesPeriode(p){
+  var auj = new Date(), a = auj.getFullYear(), m = auj.getMonth();
+  if (p === 'mois') return { debut: debutJour(new Date(a, m, 1)), fin: finJour(new Date(a, m + 1, 0)) };
+  if (p === 'mois-1') return { debut: debutJour(new Date(a, m - 1, 1)), fin: finJour(new Date(a, m, 0)) };
+  if (p === '30') { var f = finJour(auj); return { debut: debutJour(new Date(f - 29 * 86400000)), fin: f }; }
+  if (p === 'annee') return { debut: debutJour(new Date(a, 0, 1)), fin: finJour(new Date(a, 11, 31)) };
+  return { debut: null, fin: null };
+}
+
+async function publierProfil(silencieux){
+  var r = E.reglages;
+  if (!r.clePublication) {
+    if (!silencieux) toast('Il manque la clé de publication, dans Réglages.', 'rougef');
+    return false;
+  }
+  var o = optionsProfil();
+  var b = bornesPeriode(o.periode);
+  var paquet = construirePartage({
+    titre: o.titre, debut: b.debut, fin: b.fin,
+    liste: o.liste, plan: o.plan, etiquettes: o.etiquettes,
+    notes: o.notes, journal: o.journal, backtest: o.backtest,
+    pourcent: o.pourcent && E.reglages.compte > 0
+  });
+  try {
+    var rep = await fetch(SUPA_URL + '/rest/v1/rpc/journal_publier', {
+      method: 'POST',
+      headers: { apikey: SUPA_CLE, Authorization: 'Bearer ' + SUPA_CLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: PROFIL_PUBLIC, p_secret: r.clePublication,
+                             p_titre: o.titre, p_donnees: paquet })
+    });
+    var txt = await rep.text();
+    if (!rep.ok) {
+      var msg = txt;
+      try { msg = JSON.parse(txt).message || txt; } catch (e) {}
+      if (!silencieux) toast('Publication refusée : ' + ech(msg), 'rougef');
+      return false;
+    }
+    r.profilMaj = Date.now();
+    r.profilNb = paquet.tr.length;
+    await dbMettre('reglages', r);
+    if (!silencieux) toast('Profil publié : ' + paquet.tr.length + ' trades en ligne.', 'vertf');
+    if (E.ecran === 'reglages') rendreReglages();
+    return true;
+  } catch (e) {
+    if (!silencieux) toast('Publication impossible, pas de réseau ? (' + ech(e.message) + ')', 'rougef');
+    return false;
+  }
+}
+
+// Renvoie false si aucun profil n'a encore ete publie : on ouvre alors le journal.
+async function afficherProfilPublic(id){
+  var p = null, maj = null;
+  try {
+    var rep = await fetch(SUPA_URL + '/rest/v1/rpc/journal_lire', {
+      method: 'POST',
+      headers: { apikey: SUPA_CLE, Authorization: 'Bearer ' + SUPA_CLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: id || PROFIL_PUBLIC })
+    });
+    if (!rep.ok) return false;
+    var j = await rep.json();
+    if (!j || !j.donnees || !j.donnees.tr || !j.donnees.tr.length) return false;
+    p = j.donnees;
+    maj = versDate(j.maj);
+  } catch (e) {
+    return false;   // hors ligne : on retombe sur le journal local
+  }
+  await afficherRapport(p, { source: 'profil', maj: maj ? maj.getTime() : Date.now() });
+  return true;
 }
 
 // Construit le paquet complet de sauvegarde. Les images sont converties en
@@ -4217,11 +4466,30 @@ function brancher(){
 }
 
 async function demarrer(){
-  // Mode rapport partage : on n'ouvre meme pas la base. Le journal de la
-  // personne qui recoit le lien n'est ni lu, ni touche, ni ecrase.
-  if ((location.hash || '').indexOf('#rapport=') === 0) {
-    return afficherRapport(location.hash.slice(9));
+  var hash = location.hash || '';
+
+  // 1. Lien fige recu par message : on n'ouvre meme pas la base. Le journal de
+  //    la personne qui recoit le lien n'est ni lu, ni touche, ni ecrase.
+  if (hash.indexOf('#rapport=') === 0) {
+    return afficherRapportDepuisLien(hash.slice(9));
   }
+
+  // 2. Adresse de base : on montre le profil public, qui se met a jour tout
+  //    seul. N'importe quel ecran du journal (#bord, #trades, #reglages...)
+  //    ouvre le journal de travail : les favoris et le rechargement marchent.
+  var nu = hash.replace('#', '');
+  if (ECRANS_VALIDES.indexOf(nu) < 0) {
+    // #profil=<identifiant> permet d'ouvrir un profil precis, sinon c'est celui du site
+    var id = nu.indexOf('profil=') === 0 ? nu.slice(7) : null;
+    var montre = await afficherProfilPublic(id);
+    if (montre) return;
+    if (id) {
+      document.body.innerHTML = '<div class="avis jaunef" style="margin:20px">Aucun profil publié sous ce nom.</div>';
+      return;
+    }
+    // rien de publie, ou pas de reseau : on continue vers le journal
+  }
+
   try {
     DB = await ouvrirDB();
   } catch (e) {
@@ -4233,8 +4501,7 @@ async function demarrer(){
   await chargerTout();
   brancher();
   var h = (location.hash || '').replace('#', '');
-  var valides = ['import', 'bord', 'calendrier', 'trades', 'stats', 'playbooks', 'regles', 'journal', 'carnet', 'comparaison', 'reglages'];
-  allerA(valides.indexOf(h) >= 0 ? h : (E.fills.length || E.trades.length ? 'bord' : 'import'));
+  allerA(ECRANS_VALIDES.indexOf(h) >= 0 ? h : (E.fills.length || E.trades.length ? 'bord' : 'import'));
   presetComparaison('mois');
   if (!E.trades.length && !E.fills.length) {
     $('#resumeImport').innerHTML = '<div class="avis bleuf">Journal vide. Commence par glisser ton CSV ' +

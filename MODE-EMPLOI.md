@@ -107,6 +107,30 @@ photos. On les retrouve aussi en cliquant un jour dans le **Calendrier**, et la 
 Les photos d'un trade précis restent dans le détail du trade. Les deux sont sauvegardées
 ensemble dans le fichier JSON.
 
+## 4 bis-bis. Deux adresses : ton profil et ton journal
+
+Depuis le 23 septembre, l'adresse du site est coupée en deux :
+
+| Adresse | Ce que c'est |
+|---|---|
+| <https://vaelordesign.github.io/journal-trading/> | **Ton profil public.** Tes résultats en lecture seule, à jour. C'est l'adresse que tu donnes aux autres. |
+| <https://vaelordesign.github.io/journal-trading/#bord> | **Ton journal de travail.** L'application complète. C'est celle-là qu'il faut mettre en favori et sur l'écran d'accueil du téléphone. |
+
+Le profil se règle dans **Réglages → Profil public** : le titre, la période publiée, et ce que
+les gens ont le droit de voir (mêmes cases que le partage). Coche **« Publier tout seul après
+chaque import »** et ton profil suivra tes trades sans que tu y penses. Sinon, bouton
+**Publier maintenant**.
+
+Tant que tu n'as rien publié, l'adresse de base ouvre ton journal comme avant.
+
+La **clé de publication** est ce qui empêche quelqu'un d'autre d'écraser ton profil. Elle est
+fabriquée toute seule la première fois, elle vit dans ton navigateur et dans ta sauvegarde JSON.
+Elle ne part jamais en clair : le serveur n'en garde qu'une empreinte.
+
+Où vivent ces données : sur ton projet Supabase `vaelor-sites`, table `journal_profils`, une
+seule ligne. Seul ce que tu as coché y monte. **Tes photos, elles, ne quittent jamais ton
+appareil.** Une tâche quotidienne dans le dépôt empêche le projet gratuit de s'endormir.
+
 ## 4 ter. Montrer tes résultats à quelqu'un
 
 Si tu envoies simplement l'adresse du journal à quelqu'un, il verra un journal **vide** :
