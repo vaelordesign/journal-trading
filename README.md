@@ -8,7 +8,8 @@ aucune donnée qui sort du navigateur.
 
 ## Ce qu'il fait
 
-- **Import** du CSV `History` de TradingView, avec regroupement des ordres en trades
+- **Import** du CSV des ordres exécutés, **Tradovate** (`orders-filled`) ou **TradingView**
+  (`History`), avec regroupement des ordres en trades
   (position suivie symbole par symbole, prix moyen pondéré, sorties partielles,
   retournements de position, multiplicateurs des contrats à terme).
 - **Tableau de bord** : profit net, taux de réussite, facteur de profit, profit moyen,
@@ -39,5 +40,5 @@ node verifier-moteur.cjs
 compris entre `DEBUT MOTEUR` et `FIN MOTEUR` dans `index.html` et le rejoue, donc il teste
 bien le code livré. Le même test est accessible dans la page, onglet Réglages.
 
-Le mode d'emploi, avec les étapes exactes pour sortir le CSV de TradingView, est dans
+Le mode d'emploi, avec les étapes pour sortir le CSV de Tradovate ou de TradingView, est dans
 [MODE-EMPLOI.md](MODE-EMPLOI.md).

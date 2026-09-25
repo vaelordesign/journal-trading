@@ -386,12 +386,19 @@ svg text{font-family:inherit}
 
   <!-- ============ IMPORT ============ -->
   <section class="ecran" id="ec-import">
-    <h1>Importer un CSV de TradingView</h1>
+    <h1>Importer un CSV d'ordres exécutés</h1>
     <div class="avis bleuf">
-      Panneau de trading en bas de TradingView &rarr; onglet <b>History</b> ou <b>Order history</b> &rarr;
-      la petite flèche de téléchargement en haut à droite du tableau &rarr; <b>Export data</b>.
-      Le fichier arrive dans Téléchargements. Glisse-le ici.
-      <span class="gris">(TradingView n'a aucune API publique pour les trades, le CSV est la seule voie.)</span>
+      <b>Tradovate</b> &rarr; exporte la grille <b>Orders</b> filtrée sur <b>Filled</b>. Le fichier
+      s'appelle <code>tradovate-orders-filled-....csv</code>. Ces exports sont cumulatifs&nbsp;:
+      le dernier de la journée contient toute la journée, et les doublons sont écartés tout seuls.
+      <span class="gris">Attention, ils ne portent aucune commission : le profit de ces trades est brut de frais.</span>
+      <br><br>
+      <b>TradingView</b> &rarr; panneau de trading en bas, onglet <b>History</b> ou
+      <b>Order history</b>, la petite flèche de téléchargement en haut à droite du tableau,
+      puis <b>Export data</b>.
+      <br>
+      Dans les deux cas le fichier arrive dans Téléchargements, tu le glisses ici, et les deux
+      sources cohabitent dans le même journal.
     </div>
     <div class="zone-depot" id="zoneDepot">
       <div class="icone">&#128194;</div>
@@ -2408,7 +2415,7 @@ function rendreTrades(){
   $('#tradesNb').innerHTML = liste.length + ' trades - <span class="' + cls(s.net) + '">' + signe(s.net) + '</span>';
   $('#tblTrades tbody').innerHTML = liste.length
     ? liste.map(ligneTrade.bind(null, false)).join('')
-    : '<tr><td colspan="12" class="centre gris" style="padding:26px">Aucun trade. Importe un CSV de TradingView dans l\'onglet Import, ou ajoute un trade manuel.</td></tr>';
+    : '<tr><td colspan="12" class="centre gris" style="padding:26px">Aucun trade. Importe un CSV d\'ordres exécutés (Tradovate ou TradingView) dans l\'onglet Import, ou ajoute un trade manuel.</td></tr>';
   $$('#tblTrades th.triable').forEach(function(th){
     var actif = th.dataset.tri === E.tri.col;
     th.innerHTML = th.innerHTML.replace(/ [▲▼]$/, '') + (actif ? (E.tri.sens > 0 ? ' ▲' : ' ▼') : '');
@@ -4574,7 +4581,7 @@ async function demarrer(){
   presetComparaison('mois');
   if (!E.trades.length && !E.fills.length) {
     $('#resumeImport').innerHTML = '<div class="avis bleuf">Journal vide. Commence par glisser ton CSV ' +
-      '<b>Order history</b> de TradingView dans la zone ci-dessus. ' +
+      '<b>orders-filled</b> de Tradovate, ou <b>Order history</b> de TradingView, dans la zone ci-dessus. ' +
       'Le mode d\'emploi est dans le fichier <b>MODE-EMPLOI.md</b>, à côté de ce fichier.</div>';
   }
 }

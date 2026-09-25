@@ -17,9 +17,33 @@ et tiens-t'y.
 
 ---
 
-## 1. Sortir le CSV de TradingView
+## 1. Sortir le CSV de ton courtier
 
-TradingView n'a **aucune API publique** pour les trades. Le fichier CSV est la seule voie.
+Aucun courtier ne donne d'API gratuite pour ses trades. Le fichier CSV est la seule voie,
+et le journal lit **les deux formats que tu utilises** sans rien avoir à régler.
+
+### Tradovate, c'est ce que tu utilises depuis le 23 septembre 2026
+
+Dans la plateforme, exporte la grille des **ordres exécutés** (Orders, filtrée sur Filled) avec
+l'icône de téléchargement de la grille. Tu connais le chemin mieux que moi, tu l'as fait huit
+fois dans la journée du 24. Le fichier arrive dans **Téléchargements** et s'appelle
+`tradovate-orders-filled-2026-09-24T17_45_01.900Z_db170.csv`.
+
+Trois choses à savoir sur ces fichiers :
+
+- **Ils sont cumulatifs.** Chaque export reprend toute la journée depuis le début. Mesuré :
+  l'export de 17 h 23 contenait 28 ordres, celui de 17 h 45 en contenait 30, dont 28 déjà vus.
+  Tu peux donc n'importer que le dernier de la journée, ou tous : les doublons sont écartés par
+  identifiant d'ordre.
+- **Prends toujours `orders-filled`**, pas `notifications-log`, ni `positions`, ni `account-info`.
+- **Il n'y a pas de colonne commission.** Le journal met donc 0 $ de frais sur ces trades, et le
+  profit affiché est **brut**. C'est la seule inexactitude connue du journal aujourd'hui. Dis-moi
+  ce que Tradovate te prend par contrat aller-retour et je l'applique automatiquement à l'import.
+
+Le journal reconnaît les symboles Tradovate au passage : `MNQZ6` devient MNQ, `MESZ6` devient MES,
+avec le bon multiplicateur.
+
+### TradingView, pour tes anciens fichiers
 
 1. Ouvre ton graphique sur TradingView.
 2. En bas de l'écran, ouvre le **panneau de trading** (celui avec Positions / Orders / Account).
@@ -28,6 +52,9 @@ TradingView n'a **aucune API publique** pour les trades. Le fichier CSV est la s
 4. En haut à droite de ce tableau, il y a une **petite flèche de téléchargement**.
    Clique-la, puis **Export data**.
 5. Le fichier arrive dans ton dossier **Téléchargements**, un `.csv`.
+
+Ces fichiers-là, eux, portent la commission : c'est de là que viennent les 81 $ de frais que
+le journal connaît. Les deux sources cohabitent sans problème dans le même journal.
 
 ## 2. L'importer
 
