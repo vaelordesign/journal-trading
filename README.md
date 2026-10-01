@@ -20,6 +20,14 @@ aucune donnée qui sort du navigateur.
 - **Statistiques par étiquette**, par heure, par jour de semaine, par symbole.
 - **Playbooks** : des règles cochables par trade, et un écran qui chiffre ce que
   coûte chaque règle violée.
+- **Discipline** : chaque jour, une note de 1 à 10, l'état avant la séance (sommeil, énergie,
+  calme), des règles du jour à cocher par oui ou non, les erreurs commises et une leçon qui
+  devient l'objectif du lendemain. L'écran Discipline compare les jours disciplinés aux autres,
+  chiffre chaque erreur et chaque règle, confronte la note aux faits tirés des trades
+  (perte max, nombre de trades, stop dépassé, reprise précipitée après une perte, heures),
+  et montre la courbe de capital sans les jours indisciplinés.
+- **Qualité du setup** (A+, A, B, C) sur chaque trade, et ce qu'aurait donné le compte avec
+  les seuls A+ et A.
 - **Journal quotidien**, **carnet libre** avec gabarits, **comparaison de périodes**,
   **journal de backtest** séparé des trades réels.
 - **Export / import JSON** complet, captures comprises. C'est la seule sauvegarde.
@@ -36,7 +44,7 @@ partagent pas leurs données. Pour passer de l'une à l'autre, exporter puis imp
 node verifier-moteur.cjs
 ```
 
-57 vérifications. Le script ne contient pas de copie de la logique : il découpe le bloc
+107 vérifications. Le script ne contient pas de copie de la logique : il découpe le bloc
 compris entre `DEBUT MOTEUR` et `FIN MOTEUR` dans `index.html` et le rejoue, donc il teste
 bien le code livré. Le même test est accessible dans la page, onglet Réglages.
 

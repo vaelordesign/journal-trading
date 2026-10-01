@@ -339,6 +339,59 @@ svg text{font-family:inherit}
 }
 .anneau .centre-txt small{display:block;font-size:10px;color:var(--texte2);font-weight:500;text-align:center;letter-spacing:.06em}
 .bloc-sous-notes{flex:1 1 300px;min-width:260px}
+
+/* ===================== DISCIPLINE ===================== */
+.echelle10{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px}
+.echelle10 button,.echelle5 button{
+  padding:9px 0;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;
+  background:var(--fond);color:var(--texte2);border-color:var(--bord2);
+}
+.echelle10 button.on.b,.echelle5 button.on.b{background:var(--rouge);border-color:var(--rouge);color:#fff}
+.echelle10 button.on.m,.echelle5 button.on.m{background:var(--jaune);border-color:var(--jaune);color:#241a00}
+.echelle10 button.on.h,.echelle5 button.on.h{background:var(--vert);border-color:var(--vert);color:#04211f}
+.echelle10-legende{display:flex;justify-content:space-between;font-size:11px;color:var(--texte3);margin-top:4px}
+.echelle5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.echelle5 button{padding:6px 0;font-size:13px}
+.etat-ligne{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;align-items:center;margin-bottom:8px}
+@media(max-width:560px){.etat-ligne{grid-template-columns:minmax(0,1fr)}}
+.etat-ligne .n{font-size:12px;color:var(--texte2)}
+.etat-ligne .n small{display:block;font-size:10px;color:var(--texte3)}
+.critere{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;
+  padding:7px 9px;border:1px solid var(--bord);border-radius:8px;margin-bottom:6px;background:var(--fond);
+}
+.critere .t{font-size:13px}
+.critere .choix{display:flex;gap:4px}
+.critere .choix button{padding:4px 10px;font-size:12px}
+.critere .choix button.on[data-v="1"]{background:var(--vert);border-color:var(--vert);color:#04211f}
+.critere .choix button.on[data-v="0"]{background:var(--rouge);border-color:var(--rouge);color:#fff}
+.critere.oui{border-color:rgba(38,166,154,.45)}
+.critere.non{border-color:rgba(239,83,80,.5)}
+.etq-choix.erreur.on{background:var(--rouge-fond);border-color:var(--rouge);color:var(--rouge-clair)}
+.faits{display:flex;flex-direction:column;gap:5px;font-size:12px}
+.faits div{display:flex;gap:7px;align-items:flex-start}
+.faits .ic{flex:0 0 auto;width:16px;text-align:center}
+.pastille-d{
+  display:inline-block;min-width:20px;padding:0 5px;border-radius:10px;
+  font-size:10px;font-weight:700;text-align:center;line-height:16px;vertical-align:middle;
+}
+.pastille-d.b{background:var(--rouge-fond);color:var(--rouge-clair);border:1px solid rgba(239,83,80,.45)}
+.pastille-d.m{background:rgba(240,185,11,.14);color:#ffd45e;border:1px solid rgba(240,185,11,.4)}
+.pastille-d.h{background:var(--vert-fond);color:var(--vert-clair);border:1px solid rgba(38,166,154,.45)}
+.cal-case .jnum .pastille-d{margin-left:3px;line-height:14px}
+@media(max-width:700px){.cal-case .jnum .pastille-d{min-width:0;padding:0 3px;font-size:9px;margin-left:1px}}
+.niveaux3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:800px){.niveaux3{grid-template-columns:minmax(0,1fr)}}
+.niveau-carte{border:1px solid var(--bord);border-radius:var(--r);padding:13px 15px;background:var(--fond2)}
+.niveau-carte.h{border-color:rgba(38,166,154,.5)}
+.niveau-carte.m{border-color:rgba(240,185,11,.45)}
+.niveau-carte.b{border-color:rgba(239,83,80,.5)}
+.niveau-carte .grand{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.niveau-carte table{min-width:0;font-size:12px}
+.niveau-carte td{padding:5px 0;border-bottom:1px solid var(--bord);white-space:normal}
+.niveau-carte td.num{padding-left:8px}
+.verdict{font-size:14px;line-height:1.55}
+.verdict b{font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -363,6 +416,7 @@ svg text{font-family:inherit}
     <button data-ecran="playbooks">Playbooks</button>
     <button data-ecran="regles">Respect des règles</button>
     <button data-ecran="journal">Journal quotidien</button>
+    <button data-ecran="discipline">Discipline</button>
     <button data-ecran="carnet">Carnet</button>
     <button data-ecran="comparaison">Comparaison</button>
     <button data-ecran="reglages">Réglages</button>
@@ -523,6 +577,7 @@ svg text{font-family:inherit}
     </div>
     <div class="carte"><h3>Par symbole</h3><div id="statsSymboles"></div></div>
     <div class="carte"><h3>Par note d'exécution</h3><div id="statsNotes"></div></div>
+    <div class="carte"><h3>Par qualité du setup</h3><div id="statsQualite"></div></div>
     <div class="carte"><h3>Répartition des profits</h3><div id="statsHisto"></div></div>
   </section>
 
@@ -549,10 +604,16 @@ svg text{font-family:inherit}
       <input type="date" id="journalDate" style="width:auto;margin-left:auto">
       <button class="pt" id="btnJournalAuj">Aujourd'hui</button>
     </div>
+    <div class="carte" id="carteDiscipline"></div>
     <div class="grille g2">
       <div class="carte">
         <h3>Biais du matin <span class="petit gris">avant la séance</span></h3>
-        <textarea id="journalBiais" rows="9" placeholder="Où est la liquidité, quel biais, quels niveaux, quel scénario j'attends..."></textarea>
+        <textarea id="journalBiais" rows="9" placeholder="Biais des unités supérieures (H4, H1) : haussier ou baissier, pourquoi.
+Liquidité visée : quel sommet ou quel creux le prix va chercher.
+Niveaux clés : FVG, order blocks, sommets et creux de la veille.
+Killzone et annonces du jour : à quelle heure je trade, ce que j'évite.
+Perte max du jour et taille de position.
+Scénario A, scénario B."></textarea>
         <h3 style="margin-top:14px">Bilan du soir <span class="petit gris">après la séance</span></h3>
         <textarea id="journalBilan" rows="9" placeholder="Ce qui s'est passé, ce que j'ai bien fait, ce que je corrige demain..."></textarea>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -576,6 +637,12 @@ svg text{font-family:inherit}
       <h3>Journées déjà écrites</h3>
       <div id="journalListe"></div>
     </div>
+  </section>
+
+  <!-- ============ DISCIPLINE (analyse) ============ -->
+  <section class="ecran" id="ec-discipline">
+    <h1>Discipline</h1>
+    <div id="discContenu"></div>
   </section>
 
   <!-- ============ CARNET ============ -->
@@ -635,6 +702,8 @@ svg text{font-family:inherit}
         <label class="champ"><span>Risque max par trade (%)</span><input type="number" id="rgRisque" step="0.1"></label>
       </div>
       <div class="petit gris">Le risque par trade est calculé à partir du stop prévu que tu inscris dans le détail du trade&nbsp;: distance entrée-stop x quantité x multiplicateur.</div>
+      <label class="champ" style="margin:12px 0 0;max-width:420px"><span>Mes heures de trading (heure de cet ordinateur)</span><input id="rgHeures" placeholder="08:30-11:00, 13:30-16:00"></label>
+      <div class="petit gris">Laisse vide pour ne pas vérifier. Sinon, chaque trade ouvert en dehors est signalé dans la carte Discipline du jour.</div>
     </div>
 
     <div class="carte">
@@ -661,6 +730,24 @@ svg text{font-family:inherit}
         <label class="champ" style="margin:0;flex:1 1 220px"><span>Nouvelle étiquette</span><input id="nvEtq" placeholder="Ex. Entrée sur retest"></label>
         <button class="primaire" id="btnAjoutEtq">Ajouter</button>
         <button class="pt" id="btnEtqDefaut">Remettre la liste ICT d'origine</button>
+      </div>
+    </div>
+
+    <div class="carte">
+      <h3>Discipline</h3>
+      <div class="petit gris" style="margin-bottom:8px">Les règles que tu coches chaque jour dans le Journal quotidien, et la liste des erreurs qu'on peut y signaler. Écris des règles qui se vérifient par oui ou non.</div>
+      <h4>Mes règles du jour</h4>
+      <div id="rgCriteres"></div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <label class="champ" style="margin:0;flex:1 1 260px"><span>Nouvelle règle</span><input id="nvCritere" placeholder="Ex. Pas de trade pendant les 5 minutes des nouvelles"></label>
+        <button class="primaire" id="btnAjoutCritere">Ajouter</button>
+      </div>
+      <h4 style="margin-top:16px">Erreurs qu'on peut signaler</h4>
+      <div class="etiquettes" id="rgErreurs"></div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <label class="champ" style="margin:0;flex:1 1 260px"><span>Nouvelle erreur</span><input id="nvErreur" placeholder="Ex. Tradé pendant une annonce"></label>
+        <button class="primaire" id="btnAjoutErreur">Ajouter</button>
+        <button class="pt" id="btnDiscDefaut">Remettre les listes d'origine</button>
       </div>
     </div>
 
@@ -1433,6 +1520,332 @@ function joursEnInfraction(stats, reglages, trades){
   return res;
 }
 
+/* ---------- DISCIPLINE ----------
+   Chaque journee du journal peut porter, en plus du biais et du bilan :
+     discipline : la note de 1 a 10 que Julien se donne pour la journee
+     criteres   : { idCritere: true (respecte) ou false (viole) }
+     erreurs    : ['FOMO', 'Trade de vengeance', ...]
+     etat       : { sommeil: 1-5, energie: 1-5, calme: 1-5 }, rempli AVANT la seance
+     lecon      : une phrase, ce qu'il change demain
+   Les trois niveaux sont fixes ici, en clair :
+     basse 1 a 4, moyenne 5 a 7, elevee 8 a 10. */
+var NIVEAUX_DISCIPLINE = [
+  { cle: 'haute',   nom: 'Élevée',  min: 8, max: 10 },
+  { cle: 'moyenne', nom: 'Moyenne', min: 5, max: 7 },
+  { cle: 'basse',   nom: 'Basse',   min: 1, max: 4 }
+];
+// une reprise plus rapide que ca apres une perte, avec une taille egale ou plus
+// grosse, est signalee comme vengeance possible (a confirmer par Julien)
+var MINUTES_VENGEANCE = 5;
+
+function niveauDiscipline(n){
+  if (!(n >= 1)) return null;
+  for (var i = 0; i < NIVEAUX_DISCIPLINE.length; i++) {
+    if (n >= NIVEAUX_DISCIPLINE[i].min && n <= NIVEAUX_DISCIPLINE[i].max) return NIVEAUX_DISCIPLINE[i];
+  }
+  return null;
+}
+
+// vrai si la carte Discipline de la journee a ete touchee, meme partiellement
+function jourARempliDiscipline(j){
+  if (!j) return false;
+  if (j.discipline >= 1) return true;
+  if (j.erreurs && j.erreurs.length) return true;
+  if (j.criteres && Object.keys(j.criteres).length) return true;
+  if (j.aucuneErreur) return true;
+  return false;
+}
+
+/* Trades pris peu de temps apres une perte, avec une taille egale ou superieure.
+   C'est le signe mesurable du trade de vengeance : on ne devine pas l'emotion,
+   on constate la precipitation. Le trade de reference est le dernier trade
+   ferme AVANT l'ouverture du suivant. */
+function tradesSuspectsVengeance(trades, minutes){
+  var lim = (minutes || MINUTES_VENGEANCE) * 60000;
+  var parOuverture = (trades || []).slice().sort(function(a, b){ return a.ouverture - b.ouverture; });
+  var res = [];
+  parOuverture.forEach(function(t){
+    var prec = null;
+    (trades || []).forEach(function(p){
+      if (p === t || !(p.fermeture <= t.ouverture)) return;
+      if (!prec || p.fermeture > prec.fermeture) prec = p;
+    });
+    if (!prec || !(prec.net < 0)) return;
+    if (t.ouverture - prec.fermeture > lim) return;
+    if ((Number(t.qte) || 0) < (Number(prec.qte) || 0)) return;
+    res.push({ trade: t, apres: prec, minutes: (t.ouverture - prec.fermeture) / 60000 });
+  });
+  return res;
+}
+
+/* Les faits du jour, tires des trades et des limites des Reglages, sans rien
+   demander a Julien. Ils servent de miroir a la note qu'il se donne.
+   jour = une entree de statsDeTrades(...).jours : { net, nb, trades } */
+function faitsDiscipline(jour, reglages, minutes){
+  var rg = reglages || {};
+  var f = [];
+  if (!jour || !jour.nb) return f;
+  if (rg.perteJourMax > 0) {
+    var okPerte = jour.net > -Math.abs(rg.perteJourMax);
+    f.push({ cle: 'perte', ok: okPerte,
+      texte: okPerte ? 'Perte max du jour respectée (' + fmtArgent(-Math.abs(rg.perteJourMax), 0) + ')'
+                     : 'Perte max dépassée : ' + fmtArgent(jour.net, 0) + ' pour une limite de ' + fmtArgent(-Math.abs(rg.perteJourMax), 0) });
+  }
+  if (rg.tradesJourMax > 0) {
+    f.push({ cle: 'nombre', ok: jour.nb <= rg.tradesJourMax,
+      texte: jour.nb + ' trade' + (jour.nb > 1 ? 's' : '') + ' sur ' + rg.tradesJourMax + ' permis' });
+  }
+  var avecStop = jour.trades.filter(function(t){ return risqueDollars(t); });
+  if (avecStop.length) {
+    var depasses = avecStop.filter(stopDepasse).length;
+    f.push({ cle: 'stop', ok: depasses === 0,
+      texte: depasses ? depasses + ' perte(s) au-delà du stop prévu' : 'Aucune perte au-delà du stop prévu' });
+    if (rg.compte > 0 && rg.risqueMaxPct > 0) {
+      var plafond = rg.compte * rg.risqueMaxPct / 100;
+      var gros = avecStop.filter(function(t){ return risqueDollars(t) > plafond * 1.02; }).length;
+      f.push({ cle: 'risque', ok: gros === 0,
+        texte: gros ? gros + ' trade(s) risquant plus de ' + fmtArgent(plafond, 0) : 'Risque par trade sous ' + fmtArgent(plafond, 0) });
+    }
+  }
+  var susp = tradesSuspectsVengeance(jour.trades, minutes).length;
+  f.push({ cle: 'vengeance', ok: susp === 0,
+    texte: susp ? susp + ' reprise(s) en moins de ' + (minutes || MINUTES_VENGEANCE) + ' min après une perte, même taille ou plus'
+                : 'Pas de reprise précipitée après une perte' });
+  if (rg.perteJourMax > 0) {
+    var apres = tradesApresPerteMax(jour.trades, rg.perteJourMax).length;
+    if (apres) f.push({ cle: 'continue', ok: false,
+      texte: apres + ' trade(s) ouvert(s) après avoir touché la perte max' });
+  }
+  var plages = lirePlagesHoraires(rg.heuresPermises);
+  if (plages.length) {
+    var hors = jour.trades.filter(function(t){ return !dansPlagesHoraires(t.ouverture, plages); }).length;
+    f.push({ cle: 'heures', ok: hors === 0,
+      texte: hors ? hors + ' trade(s) hors de tes heures (' + rg.heuresPermises + ')' : 'Tous les trades dans tes heures' });
+  }
+  return f;
+}
+
+/* "09:30-11:00, 13:30-15:30" -> [{ debut: 570, fin: 660 }, { debut: 810, fin: 930 }]
+   en minutes depuis minuit, heure de cet ordinateur. Tout ce qui ne se lit pas est ignore. */
+function lirePlagesHoraires(txt){
+  var res = [];
+  String(txt || '').split(/[,;]/).forEach(function(morceau){
+    var m = morceau.match(/(\d{1,2})\s*(?:[:h]\s*(\d{2})?)?\s*-\s*(\d{1,2})\s*(?:[:h]\s*(\d{2})?)?/i);
+    if (!m) return;
+    var d = (+m[1]) * 60 + (+(m[2] || 0)), f = (+m[3]) * 60 + (+(m[4] || 0));
+    if (d < f && f <= 24 * 60) res.push({ debut: d, fin: f });
+  });
+  return res;
+}
+function dansPlagesHoraires(ms, plages){
+  var d = new Date(ms), min = d.getHours() * 60 + d.getMinutes();
+  return plages.some(function(p){ return min >= p.debut && min < p.fin; });
+}
+
+// Trades ouverts alors que la journee avait deja touche la perte max.
+// Le profit cumule avance dans l'ordre des fermetures.
+function tradesApresPerteMax(trades, perteMax){
+  var lim = -Math.abs(perteMax || 0);
+  if (!lim) return [];
+  var parFermeture = (trades || []).slice().sort(function(a, b){ return a.fermeture - b.fermeture; });
+  var cumul = 0, touche = null;
+  for (var i = 0; i < parFermeture.length; i++) {
+    cumul += Number(parFermeture[i].net) || 0;
+    if (cumul <= lim) { touche = parFermeture[i].fermeture; break; }
+  }
+  if (touche === null) return [];
+  return (trades || []).filter(function(t){ return t.ouverture >= touche; });
+}
+
+/* Qualite du setup notee sur chaque trade : A+, A, B, C.
+   Le "et si" montre ce qu'aurait donne le compte avec les seuls A+ et A. */
+var QUALITES = ['A+', 'A', 'B', 'C'];
+function analyseQualite(trades){
+  var notes = (trades || []).filter(function(t){ return QUALITES.indexOf(t.qualite) >= 0; });
+  var groupes = QUALITES.map(function(q){
+    var st = statsDeTrades(notes.filter(function(t){ return t.qualite === q; }));
+    return { qualite: q, nb: st.nb, net: st.net, moyenne: st.moyenne, taux: st.tauxReussite, moyenneR: st.moyenneR,
+             facteur: st.facteurProfit };
+  });
+  var bons = statsDeTrades(notes.filter(function(t){ return t.qualite === 'A+' || t.qualite === 'A'; }));
+  var tous = statsDeTrades(notes);
+  return { nbNotes: notes.length, groupes: groupes,
+           netNotes: tous.net, netBons: bons.net, nbBons: bons.nb,
+           ddNotes: tous.ddMax, ddBons: bons.ddMax };
+}
+
+// moyenne d'une liste de nombres, null si vide
+function moyenneDe(v){ return v.length ? v.reduce(function(a, b){ return a + b; }, 0) / v.length : null; }
+
+/* L'analyse complete de la discipline sur une plage.
+     jours   : les entrees du journal quotidien de la plage (tableau)
+     parJour : statsDeTrades(trades de la plage).jours
+     o       : { reglages, criteres: [{id, text}], minutes }
+   Les comparaisons d'argent ne portent que sur les journees TRADEES : une
+   journee notee 10 sans aucun trade est une bonne journee de discipline,
+   mais elle ne dit rien sur ce que la discipline rapporte. */
+function analyseDiscipline(jours, parJour, o){
+  o = o || {};
+  parJour = parJour || {};
+  var rg = o.reglages || {};
+  var res = {
+    notees: [], nbNotees: 0, nbNoteesTradees: 0, moyenne: null,
+    niveaux: [], parNote: [], pente: null, correlation: null,
+    serieActuelle: 0, meilleureSerie: 0,
+    erreurs: [], criteres: [], etat: {}, sansNote: [], ecarts: [],
+    whatIf: null
+  };
+  var liste = (jours || []).filter(function(j){ return j && j.date; })
+    .slice().sort(function(a, b){ return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+
+  // 1. les journees notees
+  liste.forEach(function(j){
+    if (!(j.discipline >= 1)) return;
+    var pj = parJour[j.date];
+    res.notees.push({ cle: j.date, note: j.discipline, net: pj ? pj.net : 0, nb: pj ? pj.nb : 0 });
+  });
+  res.nbNotees = res.notees.length;
+  res.moyenne = moyenneDe(res.notees.map(function(x){ return x.note; }));
+  var tradees = res.notees.filter(function(x){ return x.nb > 0; });
+  res.nbNoteesTradees = tradees.length;
+
+  // 2. par niveau : basse, moyenne, elevee
+  res.niveaux = NIVEAUX_DISCIPLINE.map(function(nv){
+    var ds = tradees.filter(function(x){ return x.note >= nv.min && x.note <= nv.max; });
+    var trades = [];
+    ds.forEach(function(x){ trades = trades.concat(parJour[x.cle].trades); });
+    var st = statsDeTrades(trades);
+    var nets = ds.map(function(x){ return x.net; });
+    var infra = joursEnInfraction(st, rg, trades);
+    return {
+      cle: nv.cle, nom: nv.nom, min: nv.min, max: nv.max,
+      nbJours: ds.length, net: st.net, moyenneJour: moyenneDe(nets),
+      joursVerts: nets.filter(function(n){ return n > 0; }).length,
+      tauxJoursVerts: ds.length ? nets.filter(function(n){ return n > 0; }).length / ds.length : null,
+      nbTrades: st.nb, tradesParJour: ds.length ? st.nb / ds.length : null,
+      tauxReussite: st.tauxReussite, facteurProfit: st.facteurProfit,
+      moyennePerte: st.moyennePerte, pireJour: nets.length ? Math.min.apply(null, nets) : null,
+      joursHorsLimites: Object.keys(infra).length
+    };
+  });
+
+  // 3. note par note, de 1 a 10
+  for (var n = 1; n <= 10; n++) {
+    var dn = tradees.filter(function(x){ return x.note === n; });
+    res.parNote.push({ note: n, nbJours: dn.length, moyenneJour: moyenneDe(dn.map(function(x){ return x.net; })) });
+  }
+
+  // 4. droite de tendance : combien vaut un point de discipline, en $ par jour
+  if (tradees.length >= 3) {
+    var mx = moyenneDe(tradees.map(function(x){ return x.note; }));
+    var my = moyenneDe(tradees.map(function(x){ return x.net; }));
+    var sxy = 0, sxx = 0, syy = 0;
+    tradees.forEach(function(x){
+      sxy += (x.note - mx) * (x.net - my);
+      sxx += (x.note - mx) * (x.note - mx);
+      syy += (x.net - my) * (x.net - my);
+    });
+    if (sxx > 0) {
+      res.pente = sxy / sxx;
+      res.ordonnee = my - res.pente * mx;
+      res.correlation = syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
+    }
+  }
+
+  // 5. series de journees a 8 ou plus (les journees non notees ne cassent pas la serie)
+  var serie = 0;
+  res.notees.forEach(function(x){
+    if (x.note >= 8) { serie++; if (serie > res.meilleureSerie) res.meilleureSerie = serie; }
+    else serie = 0;
+  });
+  res.serieActuelle = serie;
+
+  // 6. ce que coute chaque erreur : journees tradees avec l'erreur contre sans
+  var remplies = liste.filter(function(j){ return jourARempliDiscipline(j) && parJour[j.date] && parJour[j.date].nb; });
+  var noms = {};
+  remplies.forEach(function(j){ (j.erreurs || []).forEach(function(e){ noms[e] = true; }); });
+  res.erreurs = Object.keys(noms).map(function(nom){
+    var avec = [], sans = [];
+    remplies.forEach(function(j){
+      ((j.erreurs || []).indexOf(nom) >= 0 ? avec : sans).push(parJour[j.date].net);
+    });
+    var mA = moyenneDe(avec), mS = moyenneDe(sans);
+    return { nom: nom, nbJours: avec.length, netAvec: avec.reduce(function(a, b){ return a + b; }, 0),
+             moyenneAvec: mA, nbSans: sans.length, moyenneSans: mS,
+             ecart: (mA !== null && mS !== null) ? mA - mS : null };
+  });
+  res.erreurs.sort(function(a, b){
+    var ea = a.ecart === null ? a.moyenneAvec : a.ecart, eb = b.ecart === null ? b.moyenneAvec : b.ecart;
+    return ea - eb;
+  });
+  res.joursSansErreur = remplies.filter(function(j){ return !(j.erreurs && j.erreurs.length); }).length;
+
+  // 7. chaque regle du jour : respectee contre violee
+  res.criteres = (o.criteres || []).map(function(c){
+    var oui = [], non = [];
+    remplies.forEach(function(j){
+      var v = j.criteres ? j.criteres[c.id] : undefined;
+      if (v === true) oui.push(parJour[j.date].net);
+      else if (v === false) non.push(parJour[j.date].net);
+    });
+    var mo = moyenneDe(oui), mn = moyenneDe(non);
+    return { id: c.id, texte: c.text, nbOui: oui.length, moyenneOui: mo, nbNon: non.length, moyenneNon: mn,
+             tauxRespect: (oui.length + non.length) ? oui.length / (oui.length + non.length) : null,
+             ecart: (mo !== null && mn !== null) ? mo - mn : null };
+  }).filter(function(c){ return c.nbOui + c.nbNon > 0; });
+
+  // 8. l'etat avant la seance : profit moyen selon le sommeil, l'energie, le calme
+  ['sommeil', 'energie', 'calme'].forEach(function(k){
+    var paquets = [];
+    for (var v = 1; v <= 5; v++) paquets.push({ niveau: v, nets: [] });
+    liste.forEach(function(j){
+      var val = j.etat ? j.etat[k] : null;
+      if (!(val >= 1 && val <= 5) || !parJour[j.date] || !parJour[j.date].nb) return;
+      paquets[val - 1].nets.push(parJour[j.date].net);
+    });
+    res.etat[k] = paquets.map(function(p){
+      return { niveau: p.niveau, nbJours: p.nets.length, moyenneJour: moyenneDe(p.nets) };
+    });
+  });
+
+  // 9. journees tradees sans note : a remplir
+  var notees = {};
+  res.notees.forEach(function(x){ notees[x.cle] = true; });
+  res.sansNote = Object.keys(parJour).filter(function(c){ return parJour[c].nb && !notees[c]; }).sort().reverse();
+
+  // 10. la note contre les faits : 8 ou plus alors que les chiffres disent autre chose
+  tradees.forEach(function(x){
+    if (x.note < 8) return;
+    var fautes = faitsDiscipline(parJour[x.cle], rg, o.minutes).filter(function(f){ return !f.ok; });
+    if (fautes.length) res.ecarts.push({ cle: x.cle, note: x.note, net: x.net, fautes: fautes });
+  });
+
+  // 11. et si : le resultat sans les journees a discipline basse, et les deux courbes
+  var basse = res.niveaux.filter(function(nv){ return nv.cle === 'basse'; })[0];
+  var total = Object.keys(parJour).reduce(function(a, c){ return a + parJour[c].net; }, 0);
+  if (basse && basse.nbJours) res.whatIf = { total: total, sansBasse: total - basse.net, nbJours: basse.nbJours };
+  var noteDe = {};
+  res.notees.forEach(function(x){ noteDe[x.cle] = x.note; });
+  var cumR = 0, cumS = 0;
+  res.courbes = Object.keys(parJour).sort().map(function(c){
+    cumR += parJour[c].net;
+    if (!(noteDe[c] <= 4)) cumS += parJour[c].net;
+    return { cle: c, reelle: cumR, sansBasse: cumS, note: noteDe[c] || null };
+  });
+
+  // 12. l'objectif ecrit la veille (la lecon du jour precedent) : tenu ou pas
+  var tenu = [], pasTenu = [];
+  liste.forEach(function(j){
+    if (j.objectifTenu !== true && j.objectifTenu !== false) return;
+    var net = parJour[j.date] ? parJour[j.date].net : null;
+    (j.objectifTenu ? tenu : pasTenu).push(net);
+  });
+  var netsDe = function(l){ return l.filter(function(v){ return v !== null; }); };
+  res.objectifs = { tenus: tenu.length, pasTenus: pasTenu.length,
+                    moyenneTenu: moyenneDe(netsDe(tenu)), moyennePasTenu: moyenneDe(netsDe(pasTenu)) };
+  return res;
+}
+
 /* ==================== FIN MOTEUR ==================== */
 /* =======================================================================
    BASE DE DONNEES (IndexedDB)
@@ -1512,6 +1925,26 @@ function dbParParent(parent){
 /* =======================================================================
    ETAT
    ======================================================================= */
+/* Les regles du jour et les erreurs de la carte Discipline. Les identifiants
+   sont fixes : c'est eux que chaque journee enregistre, renommer une regle ne
+   casse donc pas l'historique. */
+var CRITERES_DEFAUT = [
+  { id: 'cr-plan',     text: 'Plan écrit avant l\'ouverture : biais, liquidité visée, niveaux, perte max' },
+  { id: 'cr-setup',    text: 'Seulement des setups A ou A+ de mon playbook, aucun trade inventé' },
+  { id: 'cr-heures',   text: 'Seulement dans mes heures (killzone), rien pendant une annonce' },
+  { id: 'cr-stop',     text: 'Stop posé dès l\'entrée, jamais éloigné ni retiré' },
+  { id: 'cr-taille',   text: 'Taille de position respectée sur chaque trade' },
+  { id: 'cr-limites',  text: 'Arrêté net à ma perte max ou à mon nombre max de trades' },
+  { id: 'cr-gestion',  text: 'Trades gérés comme prévu, pas de sortie avant la cible sans raison' }
+];
+// rangees comme Edgewonk : l'entree, la taille et le risque, la sortie
+var ERREURS_DEFAUT = [
+  'FOMO, entrée poursuivie', 'Entrée trop tôt, sans confirmation', 'Contre mon biais ou sans plan',
+  'Hors de mes heures ou pendant une annonce', 'Trade de vengeance', 'Hésité, setup valide raté',
+  'Taille trop grosse', 'Pas de stop ou stop éloigné', 'Trop de trades', 'Continué après ma perte max',
+  'Coupé un gagnant trop tôt', 'Gardé un perdant après invalidation'
+];
+
 var REGLAGES_DEFAUT = {
   id: 'main',
   compte: 25000,
@@ -1520,6 +1953,9 @@ var REGLAGES_DEFAUT = {
   risqueMaxPct: 1,
   multiplicateurs: JSON.parse(JSON.stringify(MULTIPLICATEURS_DEFAUT)),
   etiquettes: ETIQUETTES_DEFAUT.slice(),
+  criteresDiscipline: JSON.parse(JSON.stringify(CRITERES_DEFAUT)),
+  erreursDiscipline: ERREURS_DEFAUT.slice(),
+  heuresPermises: '',
   dossiers: ['Revues de semaine', 'Preparation', 'Idees'],
   inclureSimules: false
 };
@@ -1539,7 +1975,7 @@ var E = {
 };
 
 var CHAMPS_ANNOTATION = ['stopPrevu', 'ciblePrevue', 'notes', 'tags', 'note',
-                         'playbookId', 'regles', 'nbImages', 'favori'];
+                         'playbookId', 'regles', 'nbImages', 'favori', 'qualite'];
 
 // bloc photos de l'ecran Journal quotidien, pour que Ctrl+V sache ou deposer
 var photosJournal = null;
@@ -1795,6 +2231,8 @@ function fusionnerReglages(r){
     base.multiplicateurs = JSON.parse(JSON.stringify(MULTIPLICATEURS_DEFAUT));
   }
   if (!base.etiquettes || !base.etiquettes.length) base.etiquettes = ETIQUETTES_DEFAUT.slice();
+  if (!Array.isArray(base.criteresDiscipline)) base.criteresDiscipline = JSON.parse(JSON.stringify(CRITERES_DEFAUT));
+  if (!Array.isArray(base.erreursDiscipline)) base.erreursDiscipline = ERREURS_DEFAUT.slice();
   return base;
 }
 
@@ -1893,10 +2331,10 @@ function joursTries(stats){
 /* =======================================================================
    NAVIGATION ET PLAGE DE DATES
    ======================================================================= */
-var ECRANS_AVEC_PLAGE = { bord: 1, trades: 1, stats: 1, playbooks: 1, regles: 1 };
+var ECRANS_AVEC_PLAGE = { bord: 1, trades: 1, stats: 1, playbooks: 1, regles: 1, discipline: 1 };
 // Toute adresse qui n'est pas un de ces ecrans mene au profil public.
 var ECRANS_VALIDES = ['import', 'bord', 'calendrier', 'trades', 'stats', 'playbooks',
-                      'regles', 'journal', 'carnet', 'comparaison', 'reglages'];
+                      'regles', 'journal', 'discipline', 'carnet', 'comparaison', 'reglages'];
 
 function allerA(ecran){
   E.ecran = ecran;
@@ -1938,7 +2376,7 @@ function rendre(){
   var f = {
     import: rendreImport, bord: rendreBord, calendrier: rendreCalendrier,
     trades: rendreTrades, stats: rendreStats, playbooks: rendrePlaybooks,
-    regles: rendreRegles, journal: rendreJournal, carnet: rendreCarnet,
+    regles: rendreRegles, journal: rendreJournal, discipline: rendreDiscipline, carnet: rendreCarnet,
     comparaison: rendreComparaison, reglages: rendreReglages
   }[E.ecran];
   if (f) f();
@@ -2238,7 +2676,7 @@ function grilleCalendrierHtml(sMois, an, mois, infra, notes){
     if (infra[cle]) c += ' enfreint';
     cases.push('<div class="' + c + '" data-jour="' + cle + '"' +
       (infra[cle] ? ' data-bulle="' + ech(infra[cle].join(' ; ')) + '"' : '') + '>' +
-      '<div class="jnum">' + j + '</div>' +
+      '<div class="jnum">' + j + (note ? pastilleDiscipline(note.discipline, 'discipline ' + note.discipline + '/10') : '') + '</div>' +
       (jour ? '<div class="jval ' + cls(jour.net) + '">' + signe(jour.net, 0) + '</div>' +
               '<div class="jnb">' + jour.nb + ' trade' + (jour.nb > 1 ? 's' : '') + '</div>' : '') +
       (infra[cle] ? '<div class="alerte">&#9888;</div>' : '') +
@@ -2315,6 +2753,14 @@ function ouvrirJour(cle){
       '<div><h4>Bilan du soir</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
         (note.bilan ? ech(note.bilan) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
     '</div>' +
+    (jourARempliDiscipline(note) ?
+      '<h4 style="margin-top:14px">Discipline</h4><div class="carte serre petit">' +
+        (note.discipline ? '<b>Note : </b>' + pastilleDiscipline(note.discipline) + ' /10 &nbsp; ' : '') +
+        (note.erreurs && note.erreurs.length
+          ? '<b>Erreurs : </b>' + note.erreurs.map(function(e){ return '<span class="puce r">' + ech(e) + '</span>'; }).join(' ')
+          : (note.aucuneErreur ? '<span class="puce v">aucune erreur</span>' : '')) +
+        (note.lecon ? '<div style="margin-top:6px"><b>Leçon : </b>' + ech(note.lecon) + '</div>' : '') +
+      '</div>' : '') +
     '<h4 style="margin-top:14px">Photos de la journée</h4>' +
     '<div id="jourPhotos"></div>';
   var m = modale(fmtJourLong(cle), corps,
@@ -2405,7 +2851,8 @@ function ligneTrade(compact, t){
           (t.tags.length > 3 ? ' <span class="gris mini">+' + (t.tags.length - 3) + '</span>' : '')
         : ((t.nbImages || MODE_RAPPORT) ? '' : '<span class="gris mini">à remplir</span>')) +
         (t.nbImages ? ' <span class="puce a">' + t.nbImages + ' image(s)</span>' : '') +
-        (t.playbookRegles ? ' <span class="puce a">' + ech(t.playbookRegles.nom) + '</span>' : '') + '</td>') +
+        (t.playbookRegles ? ' <span class="puce a">' + ech(t.playbookRegles.nom) + '</span>' : '') +
+        (t.qualite ? ' <span class="puce ' + ({ h: 'v', m: 'j', b: 'r' })[classeQualite(t.qualite)] + '">' + ech(t.qualite) + '</span>' : '') + '</td>') +
     '</tr>';
 }
 
@@ -2479,12 +2926,20 @@ async function ouvrirTrade(cle){
       '<div id="tdCalculR"></div>' +
 
       '<h4 style="margin-top:14px">Note d\'exécution <span class="gris" style="text-transform:none;letter-spacing:0">independante du resultat en argent</span></h4>' +
-      '<div class="étoiles" id="tdEtoiles">' +
+      '<div class="etoiles" id="tdEtoiles">' +
         [1,2,3,4,5].map(function(n){
           return '<button data-n="' + n + '" class="' + ((t.note || 0) >= n ? 'on' : '') + '">&#9733;</button>';
         }).join('') +
         '<button class="fantome pt" id="tdNoteZero" style="font-size:11px;margin-left:8px">effacer</button>' +
       '</div>' +
+
+      '<h4 style="margin-top:14px">Qualité du setup <span class="gris" style="text-transform:none;letter-spacing:0">telle que tu la voyais avant d\'entrer</span></h4>' +
+      '<div class="echelle5" id="tdQualite" style="grid-template-columns:repeat(4,minmax(0,1fr));max-width:280px">' +
+        QUALITES.map(function(q){
+          return '<button data-q="' + q + '" class="' + classeQualite(q) + (t.qualite === q ? ' on' : '') + '">' + q + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="gris mini" style="margin-top:4px">A+ = tout y est, A = presque, B = il manque quelque chose, C = je n\'aurais pas dû.</div>' +
     '</div>' +
 
     '<div>' +
@@ -2584,6 +3039,13 @@ async function ouvrirTrade(cle){
     noteLocale = null;
     $$('#tdEtoiles button[data-n]').forEach(function(x){ x.classList.remove('on'); });
   };
+  var qualiteLocale = t.qualite || null;
+  $$('#tdQualite button', m).forEach(function(b){
+    b.onclick = function(){
+      qualiteLocale = qualiteLocale === b.dataset.q ? null : b.dataset.q;   // retaper l'efface
+      $$('#tdQualite button').forEach(function(x){ x.classList.toggle('on', x.dataset.q === qualiteLocale); });
+    };
+  });
   $$('#tdEtiquettes input', m).forEach(function(i){
     i.onchange = function(){ i.closest('.etq-choix').classList.toggle('on', i.checked); };
   });
@@ -2628,6 +3090,7 @@ async function ouvrirTrade(cle){
     if (!isFinite(t.ciblePrevue)) t.ciblePrevue = null;
     t.notes = $('#tdNotes').value;
     t.note = noteLocale;
+    t.qualite = qualiteLocale;
     t.tags = $$('#tdEtiquettes input:checked').map(function(i){ return i.value; });
     t.playbookId = $('#tdPlaybook').value || null;
     var regles = {};
@@ -2932,7 +3395,7 @@ function tableauGroupes(groupes, nomColonne){
 function rendreStats(){
   var trades = tradesActifs();
   if (!trades.length) {
-    ['statsEtiquettes', 'statsHeures', 'statsJours', 'statsSymboles', 'statsNotes', 'statsHisto'].forEach(function(id){
+    ['statsEtiquettes', 'statsHeures', 'statsJours', 'statsSymboles', 'statsNotes', 'statsQualite', 'statsHisto'].forEach(function(id){
       $('#' + id).innerHTML = '<div class="vide">Aucun trade sur la plage choisie.</div>';
     });
     return;
@@ -2965,6 +3428,14 @@ function rendreStats(){
   parNote.sort(function(a, b){ return a.cle.localeCompare(b.cle); });
   $('#statsNotes').innerHTML = tableauGroupes(parNote, 'Note d\'exécution') +
     '<div class="petit gris" style="margin-top:8px">Si tes trades notés 5 étoiles perdent de l\'argent, le problème n\'est pas ton exécution mais ta stratégie.</div>';
+
+  // par qualite du setup, dans l'ordre A+, A, B, C
+  var parQualite = grouper(trades, function(t){ return t.qualite || '(pas notée)'; });
+  var ordreQ = QUALITES.concat(['(pas notée)']);
+  parQualite.sort(function(a, b){ return ordreQ.indexOf(a.cle) - ordreQ.indexOf(b.cle); });
+  $('#statsQualite').innerHTML = tableauGroupes(parQualite, 'Qualité du setup') +
+    '<div class="petit gris" style="margin-top:8px">Si tes B et tes C perdent de l\'argent, la solution n\'est pas une autre stratégie : ' +
+    'c\'est de ne plus les prendre. L\'écran Discipline chiffre ce que tu aurais gagné avec tes seuls A+ et A.</div>';
 
   // repartition
   $('#statsHisto').innerHTML = svgHistogramme(trades.map(function(t){ return t.net; }), 14) +
@@ -3137,6 +3608,9 @@ function rendreRegles(){
    ECRAN 9 : JOURNAL QUOTIDIEN
    ======================================================================= */
 function rendreJournal(){
+  // une sauvegarde automatique en attente appartient a la journee encore affichee :
+  // on l'ecrit avant de repeindre l'ecran avec une autre date
+  viderSauvegardeJournal();
   var cle = E.journalDate;
   $('#journalDate').value = cle;
   var note = E.jours[cle] || { date: cle, biais: '', bilan: '' };
@@ -3157,6 +3631,8 @@ function rendreJournal(){
         s.tauxReussite === null ? '' : fmtNombre(s.tauxReussite * 100, 0) + ' % de réussite') +
     '</div>' +
     (infra[cle] ? '<div class="avis rougef" style="margin-top:12px"><b>Limites dépassées :</b> ' + ech(infra[cle].join(' ; ')) + '</div>' : '');
+
+  rendreCarteDiscipline(cle, s.jours[cle] || null);
 
   $('#journalTrades').innerHTML = duJour.length
     ? tableauTrades(duJour, true)
@@ -3191,7 +3667,7 @@ async function majListeJournees(){
   });
   var cles = Object.keys(E.jours).filter(function(c){
     var j = E.jours[c];
-    return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim());
+    return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim()) || jourARempliDiscipline(j);
   });
   Object.keys(parJour).forEach(function(c){ if (cles.indexOf(c) < 0) cles.push(c); });
   cles.sort().reverse();
@@ -3204,6 +3680,7 @@ async function majListeJournees(){
       '<div style="flex:1 1 auto"><div class="t">' + fmtJourLong(c) + '</div>' +
       '<div class="d">' + (extrait ? ech(extrait) + (extrait.length >= 110 ? '...' : '') : '<i>pas de texte</i>') + '</div></div>' +
       (parJour[c] ? '<div class="puce a nowrap">&#128247; ' + parJour[c] + '</div>' : '') +
+      pastilleDiscipline(j.discipline, 'discipline ' + j.discipline + '/10') +
       '<div class="' + cls(net) + ' gras nowrap">' + (net === null ? '' : signe(net, 0)) + '</div></div>';
   }).join('') + '</div>' : '<div class="petit gris">Aucune journée écrite pour l\'instant.</div>';
   $$('#journalListe [data-jr]').forEach(function(d){
@@ -3211,14 +3688,584 @@ async function majListeJournees(){
   });
 }
 
-async function enregistrerJournal(){
-  var cle = E.journalDate;
-  var n = { date: cle, biais: $('#journalBiais').value, bilan: $('#journalBilan').value, maj: Date.now() };
-  await dbMettre('jours', n);
+// silencieux = sauvegarde automatique (un tap sur la carte Discipline, du texte tape) :
+// pas de message qui clignote a chaque touche.
+async function enregistrerJournal(silencieux){
+  clearTimeout(minuteurJournal); minuteurJournal = null;
+  // la journee affichee, pas forcement E.journalDate si la date vient de changer
+  var cle = (discJour && discJour.date) || E.journalDate;
+  var n = Object.assign({}, E.jours[cle] || {}, {
+    date: cle, biais: $('#journalBiais').value, bilan: $('#journalBilan').value, maj: Date.now()
+  });
+  if (discJour && discJour.date === cle) {
+    n.discipline = discJour.discipline || null;
+    n.criteres = Object.assign({}, discJour.criteres);
+    n.erreurs = discJour.erreurs.slice();
+    n.etat = Object.assign({}, discJour.etat);
+    n.lecon = discJour.lecon || '';
+    n.aucuneErreur = !!discJour.aucuneErreur;
+    n.objectifTenu = discJour.objectifTenu;
+  }
   E.jours[cle] = n;
-  $('#journalEtat').textContent = 'enregistré le ' + fmtDate(n.maj);
+  await dbMettre('jours', n);
+  var etat = 'enregistré à ' + fmtHeureCourte(n.maj);
+  $('#journalEtat').textContent = etat;
+  if ($('#discEtat')) $('#discEtat').textContent = etat;
   majListeJournees();
-  toast('Journal du ' + fmtDate(jourDepuisCle(cle).getTime(), false) + ' enregistré.', 'vertf');
+  if (silencieux !== true) toast('Journal du ' + fmtDate(jourDepuisCle(cle).getTime(), false) + ' enregistré.', 'vertf');
+}
+
+var minuteurJournal = null;
+function sauverJournalBientot(delai){
+  clearTimeout(minuteurJournal);
+  minuteurJournal = setTimeout(function(){ enregistrerJournal(true); }, delai || 300);
+}
+function viderSauvegardeJournal(){
+  if (minuteurJournal) enregistrerJournal(true);
+}
+
+/* ---------------------------------------------------------------
+   CARTE DISCIPLINE DU JOUR (ecran Journal quotidien)
+   Tout se remplit au doigt et s'enregistre tout seul. Le brouillon
+   discJour porte sa date : une sauvegarde en retard ne peut pas
+   atterrir sur une autre journee.
+   --------------------------------------------------------------- */
+var discJour = null;
+
+function classeNiveau(n){
+  var nv = niveauDiscipline(n);
+  return nv ? ({ haute: 'h', moyenne: 'm', basse: 'b' })[nv.cle] : '';
+}
+function classeQualite(q){ return q === 'C' ? 'b' : (q === 'B' ? 'm' : 'h'); }
+function pastilleDiscipline(n, titre){
+  if (!(n >= 1)) return '';
+  return '<span class="pastille-d ' + classeNiveau(n) + '"' + (titre ? ' title="' + ech(titre) + '"' : '') + '>' + n + '</span>';
+}
+
+var ETATS_AVANT = [
+  { cle: 'sommeil', nom: 'Sommeil',   bas: 'mal dormi',        haut: 'bien reposé' },
+  { cle: 'energie', nom: 'Énergie',   bas: 'vidé, distrait',   haut: 'concentré' },
+  { cle: 'calme',   nom: 'Calme',     bas: 'stressé, pressé',  haut: 'serein' }
+];
+
+function rendreCarteDiscipline(cle, jourStats){
+  var j = E.jours[cle] || {};
+  discJour = {
+    date: cle,
+    discipline: j.discipline || null,
+    criteres: Object.assign({}, j.criteres || {}),
+    erreurs: (j.erreurs || []).slice(),
+    etat: Object.assign({}, j.etat || {}),
+    lecon: j.lecon || '',
+    aucuneErreur: !!j.aucuneErreur,
+    objectifTenu: (j.objectifTenu === true || j.objectifTenu === false) ? j.objectifTenu : null
+  };
+  var rg = E.reglages;
+  // la lecon ecrite la derniere journee avant celle-ci devient l'objectif du jour
+  var cleVeille = Object.keys(E.jours).filter(function(c){
+    return c < cle && E.jours[c].lecon && E.jours[c].lecon.trim();
+  }).sort().pop();
+  // une erreur retiree des Reglages mais deja cochee ce jour-la reste visible
+  var erreurs = rg.erreursDiscipline.slice();
+  discJour.erreurs.forEach(function(e){ if (erreurs.indexOf(e) < 0) erreurs.push(e); });
+
+  var echelle = '';
+  for (var n = 1; n <= 10; n++) {
+    echelle += '<button data-dn="' + n + '" class="' + classeNiveau(n) + (discJour.discipline === n ? ' on' : '') + '">' + n + '</button>';
+  }
+  var etats = ETATS_AVANT.map(function(e){
+    var b = '';
+    for (var v = 1; v <= 5; v++) {
+      var c = v <= 2 ? 'b' : (v === 3 ? 'm' : 'h');
+      b += '<button data-etat="' + e.cle + '" data-v="' + v + '" class="' + c + (discJour.etat[e.cle] === v ? ' on' : '') + '">' + v + '</button>';
+    }
+    return '<div class="etat-ligne"><div class="n">' + e.nom + '<small>1 = ' + e.bas + ', 5 = ' + e.haut + '</small></div>' +
+      '<div class="echelle5">' + b + '</div></div>';
+  }).join('');
+  var criteres = rg.criteresDiscipline.length ? rg.criteresDiscipline.map(function(c){
+    var v = discJour.criteres[c.id];
+    return '<div class="critere' + (v === true ? ' oui' : (v === false ? ' non' : '')) + '" data-cr="' + ech(c.id) + '">' +
+      '<div class="t">' + ech(c.text) + '</div><div class="choix">' +
+      '<button data-v="1" class="' + (v === true ? 'on' : '') + '">Oui</button>' +
+      '<button data-v="0" class="' + (v === false ? 'on' : '') + '">Non</button></div></div>';
+  }).join('') : '<div class="petit gris">Aucune règle. Ajoute les tiennes dans Réglages, carte Discipline.</div>';
+  var chips = erreurs.map(function(e){
+    var on = discJour.erreurs.indexOf(e) >= 0;
+    return '<label class="etq-choix erreur' + (on ? ' on' : '') + '"><input type="checkbox" value="' + ech(e) + '"' +
+      (on ? ' checked' : '') + '>' + ech(e) + '</label>';
+  }).join('');
+
+  $('#carteDiscipline').innerHTML =
+    '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px">' +
+      '<h3 style="margin:0">Discipline du jour</h3>' +
+      '<span class="petit gris">un tap suffit, tout s\'enregistre tout seul</span>' +
+      '<span class="petit gris" id="discEtat" style="margin-left:auto">' + (j.maj ? 'enregistré à ' + fmtHeureCourte(j.maj) : '') + '</span>' +
+    '</div>' +
+    (cleVeille ?
+      '<div class="critere" id="discObjectif" style="margin-bottom:12px">' +
+        '<div class="t"><span class="gris mini">MON OBJECTIF DU JOUR, écrit le ' + fmtDate(jourDepuisCle(cleVeille).getTime(), false) + '</span><br>' +
+          '<b>' + ech(E.jours[cleVeille].lecon) + '</b><br><span class="gris mini">Je l\'ai tenu ?</span></div>' +
+        '<div class="choix"><button data-v="1">Oui</button><button data-v="0">Non</button></div>' +
+      '</div>' : '') +
+    '<h4>Ma note de discipline</h4>' +
+    '<div class="echelle10" id="discEchelle">' + echelle + '</div>' +
+    '<div class="echelle10-legende"><span>1 = j\'ai fait n\'importe quoi</span><span>10 = mon plan, rien que mon plan</span></div>' +
+    '<div id="discMiroir" style="margin-top:10px"></div>' +
+    '<div class="grille g2" style="margin-top:12px">' +
+      '<div>' +
+        '<h4>Avant la séance : mon état</h4>' + etats +
+        '<h4 style="margin-top:14px">Mes règles du jour <span class="gris" id="discCompteRegles" style="text-transform:none;letter-spacing:0"></span></h4>' +
+        '<div id="discCriteres">' + criteres + '</div>' +
+        '<div class="gris mini">À moitié respectée = Non. Les journaux des pros sont stricts là-dessus, sinon le chiffre ne veut plus rien dire.</div>' +
+      '</div>' +
+      '<div>' +
+        '<h4>Erreurs commises aujourd\'hui</h4>' +
+        '<div class="etiquettes" id="discErreurs">' + chips + '</div>' +
+        '<label class="pilule-interrupteur" style="margin-top:8px"><input type="checkbox" id="discAucuneErreur"' +
+          (discJour.aucuneErreur ? ' checked' : '') + '> Aucune erreur aujourd\'hui</label>' +
+        '<h4 style="margin-top:14px">Ce que disent les chiffres</h4>' +
+        '<div id="discFaits"></div>' +
+        '<label class="champ" style="margin-top:14px"><span>La leçon du jour : une seule chose que je change demain</span>' +
+          '<input id="discLecon" value="' + ech(discJour.lecon) + '" placeholder="Ex. Je n\'entre plus avant que la bougie de 5 min ferme"></label>' +
+      '</div>' +
+    '</div>';
+
+  var faits = faitsDiscipline(jourStats, rg);
+  var suspects = jourStats ? tradesSuspectsVengeance(jourStats.trades) : [];
+  $('#discFaits').innerHTML = !jourStats
+    ? '<div class="petit gris">Aucun trade clôturé ce jour-là. Ne pas trader quand rien ne se présente, c\'est aussi de la discipline.</div>'
+    : '<div class="faits">' + faits.map(function(f){
+        return '<div><span class="ic ' + (f.ok ? 'vert' : 'rouge') + '">' + (f.ok ? '&#10003;' : '&#10007;') + '</span><span>' + ech(f.texte) + '</span></div>';
+      }).join('') +
+      (suspects.length ? '<div class="gris mini" style="padding-left:23px">' + suspects.map(function(x){
+          return 'à ' + fmtHeureCourte(x.trade.ouverture) + ', ' + fmtNombre(x.minutes, 0) + ' min après une perte de ' + fmtArgent(x.apres.net, 0);
+        }).join(' ; ') + '</div>' : '') +
+      '<div class="gris mini">Calculé depuis tes trades et les limites de Réglages, sans rien te demander.</div></div>';
+
+  function majMiroir(){
+    var rep = rg.criteresDiscipline.filter(function(c){ return discJour.criteres[c.id] !== undefined; });
+    var oui = rep.filter(function(c){ return discJour.criteres[c.id] === true; }).length;
+    $('#discCompteRegles').textContent = rep.length ? '(' + oui + ' respectée' + (oui > 1 ? 's' : '') + ' sur ' + rep.length + ')' : '';
+    var fautes = faits.filter(function(f){ return !f.ok; });
+    var n = discJour.discipline;
+    var html = '';
+    if (n >= 8 && fautes.length) {
+      html = '<div class="avis jaunef mb0">Tu te mets <b>' + n + '/10</b>, mais les chiffres disent : ' +
+        fautes.map(function(f){ return ech(f.texte.charAt(0).toLowerCase() + f.texte.slice(1)); }).join(', ') +
+        '. Une note honnête vaut plus qu\'une belle note : c\'est elle que l\'écran Discipline analyse.</div>';
+    } else if (n >= 8 && rep.length && oui < rep.length) {
+      html = '<div class="avis jaunef mb0">Tu te mets <b>' + n + '/10</b> avec ' + (rep.length - oui) + ' règle(s) violée(s). Vérifie que ta note le reflète.</div>';
+    } else if (n && n <= 4 && !discJour.erreurs.length) {
+      html = '<div class="avis bleuf mb0">Note basse : coche les erreurs qui l\'expliquent, c\'est ce qui permet de chiffrer ce que chacune te coûte.</div>';
+    } else if (!n && (rep.length || discJour.erreurs.length)) {
+      html = '<div class="petit gris">' + (rep.length ? oui + ' règle(s) respectée(s) sur ' + rep.length + '. ' : '') +
+        'Donne-toi une note de 1 à 10 pour que la journée compte dans l\'analyse.</div>';
+    }
+    $('#discMiroir').innerHTML = html;
+  }
+  majMiroir();
+
+  $$('#discEchelle button').forEach(function(b){
+    b.onclick = function(){
+      var v = +b.dataset.dn;
+      discJour.discipline = discJour.discipline === v ? null : v;   // retaper la meme note l'efface
+      $$('#discEchelle button').forEach(function(x){ x.classList.toggle('on', +x.dataset.dn === discJour.discipline); });
+      majMiroir();
+      sauverJournalBientot();
+    };
+  });
+  $$('#carteDiscipline [data-etat]').forEach(function(b){
+    b.onclick = function(){
+      var k = b.dataset.etat, v = +b.dataset.v;
+      if (discJour.etat[k] === v) delete discJour.etat[k]; else discJour.etat[k] = v;
+      $$('#carteDiscipline [data-etat="' + k + '"]').forEach(function(x){ x.classList.toggle('on', discJour.etat[k] === +x.dataset.v); });
+      sauverJournalBientot();
+    };
+  });
+  $$('#discCriteres [data-cr]').forEach(function(ligne){
+    $$('button', ligne).forEach(function(b){
+      b.onclick = function(){
+        var id = ligne.dataset.cr, v = b.dataset.v === '1';
+        if (discJour.criteres[id] === v) delete discJour.criteres[id]; else discJour.criteres[id] = v;
+        var cur = discJour.criteres[id];
+        ligne.classList.toggle('oui', cur === true);
+        ligne.classList.toggle('non', cur === false);
+        $$('button', ligne).forEach(function(x){ x.classList.toggle('on', cur !== undefined && (x.dataset.v === '1') === cur); });
+        majMiroir();
+        sauverJournalBientot();
+      };
+    });
+  });
+  $$('#discErreurs input').forEach(function(i){
+    i.onchange = function(){
+      i.closest('.etq-choix').classList.toggle('on', i.checked);
+      discJour.erreurs = $$('#discErreurs input:checked').map(function(x){ return x.value; });
+      if (i.checked) { $('#discAucuneErreur').checked = false; discJour.aucuneErreur = false; }
+      majMiroir();
+      sauverJournalBientot();
+    };
+  });
+  // cocher Aucune erreur vide les erreurs cochees, et cocher une erreur decoche Aucune erreur
+  $('#discAucuneErreur').onchange = function(){
+    discJour.aucuneErreur = this.checked;
+    if (!this.checked) { sauverJournalBientot(); return; }
+    $$('#discErreurs input').forEach(function(x){ x.checked = false; x.closest('.etq-choix').classList.remove('on'); });
+    discJour.erreurs = [];
+    majMiroir();
+    sauverJournalBientot();
+  };
+  $('#discLecon').oninput = function(){ discJour.lecon = this.value; sauverJournalBientot(800); };
+
+  var obj = $('#discObjectif');
+  if (obj) {
+    var peindreObjectif = function(){
+      var v = discJour.objectifTenu;
+      obj.classList.toggle('oui', v === true);
+      obj.classList.toggle('non', v === false);
+      $$('button', obj).forEach(function(x){ x.classList.toggle('on', v !== null && (x.dataset.v === '1') === v); });
+    };
+    peindreObjectif();
+    $$('button', obj).forEach(function(b){
+      b.onclick = function(){
+        var v = b.dataset.v === '1';
+        discJour.objectifTenu = discJour.objectifTenu === v ? null : v;
+        peindreObjectif();
+        sauverJournalBientot();
+      };
+    });
+  }
+}
+
+/* =======================================================================
+   ECRAN : DISCIPLINE (l'analyse)
+   Compare les journees ou Julien s'est donne une note haute et celles ou
+   il s'est donne une note basse, chiffre chaque erreur et chaque regle,
+   et confronte la note aux faits tires des trades. Tout le calcul est
+   dans analyseDiscipline (moteur, teste) ; ici on ne fait que dessiner.
+   ======================================================================= */
+// les graphiques gardent un texte lisible sur telephone : on dessine plus etroit
+function largeurGraphe(){ return window.innerWidth < 700 ? 520 : 1000; }
+var COULEUR_NIVEAU = { h: 'var(--vert)', m: 'var(--jaune)', b: 'var(--rouge)' };
+
+// nuage : une pastille par journee (note en x, profit en y), la moyenne par note
+// en barre pale, et la droite de tendance
+function svgNuageDiscipline(an){
+  var pts = an.notees.filter(function(x){ return x.nb > 0; });
+  if (!pts.length) return '<div class="vide">Aucune journée notée et tradée sur la plage.</div>';
+  var L = largeurGraphe(), H = Math.round(L * 0.34), mg = { h: 16, b: 34, g: 62, d: 14 };
+  var w = L - mg.g - mg.d, h = H - mg.h - mg.b;
+  var vals = pts.map(function(x){ return x.net; }).concat([0]);
+  var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
+  if (vmax === vmin) { vmax += 1; vmin -= 1; }
+  var marge = (vmax - vmin) * 0.1; vmin -= marge; vmax += marge;
+  var X = function(n){ return mg.g + w * (n - 0.5) / 10; };
+  var Y = function(v){ return mg.h + h - h * (v - vmin) / (vmax - vmin); };
+  var s = '<svg viewBox="0 0 ' + L + ' ' + H + '" style="width:100%;height:auto;display:block">';
+  for (var k = 0; k <= 4; k++) {
+    var v = vmin + (vmax - vmin) * k / 4, y = Y(v);
+    s += '<line x1="' + mg.g + '" y1="' + y.toFixed(1) + '" x2="' + (L - mg.d) + '" y2="' + y.toFixed(1) + '" stroke="var(--bord)"/>' +
+      '<text x="' + (mg.g - 8) + '" y="' + (y + 4).toFixed(1) + '" fill="var(--texte3)" font-size="12" text-anchor="end">' + fmtNombre(v, 0) + '</text>';
+  }
+  var y0 = Y(0);
+  an.parNote.forEach(function(p){
+    var c = classeNiveau(p.note), cx = X(p.note), larg = w / 10 * 0.62;
+    s += '<text x="' + cx.toFixed(1) + '" y="' + (H - 12) + '" fill="var(--texte2)" font-size="13" text-anchor="middle" font-weight="600">' + p.note + '</text>';
+    if (p.moyenneJour === null) return;
+    var yy = Y(p.moyenneJour);
+    s += '<rect x="' + (cx - larg / 2).toFixed(1) + '" y="' + Math.min(y0, yy).toFixed(1) + '" width="' + larg.toFixed(1) +
+      '" height="' + Math.max(1, Math.abs(yy - y0)).toFixed(1) + '" rx="3" fill="' + COULEUR_NIVEAU[c] + '" opacity=".22"' +
+      ' data-bulle="Note ' + p.note + ' : ' + ech(signe(p.moyenneJour, 0)) + ' par jour en moyenne, ' + p.nbJours + ' journée(s)"/>';
+  });
+  s += '<line x1="' + mg.g + '" y1="' + y0.toFixed(1) + '" x2="' + (L - mg.d) + '" y2="' + y0.toFixed(1) + '" stroke="var(--bord2)"/>';
+  if (an.pente !== null) {
+    var ya = Y(an.ordonnee + an.pente * 1), yb = Y(an.ordonnee + an.pente * 10);
+    s += '<line x1="' + X(1).toFixed(1) + '" y1="' + ya.toFixed(1) + '" x2="' + X(10).toFixed(1) + '" y2="' + yb.toFixed(1) +
+      '" stroke="var(--accent)" stroke-width="2" stroke-dasharray="7 5"/>';
+  }
+  // les pastilles d'une meme note sont ecartees un peu pour ne pas se cacher
+  var vus = {};
+  pts.forEach(function(x){
+    var i = vus[x.note] = (vus[x.note] || 0) + 1;
+    var dx = ((i % 5) - 2) * (w / 10 * 0.09);
+    s += '<circle cx="' + (X(x.note) + dx).toFixed(1) + '" cy="' + Y(x.net).toFixed(1) + '" r="6" fill="' + COULEUR_NIVEAU[classeNiveau(x.note)] +
+      '" stroke="var(--fond)" stroke-width="1.5" data-bulle="' + ech(fmtJourLong(x.cle) + ' : note ' + x.note + ', ' + signe(x.net, 0) + ' sur ' + x.nb + ' trade(s)') + '"/>';
+  });
+  return s + '</svg>';
+}
+
+// la note de chaque journee dans le temps, avec la moyenne des 5 dernieres
+function svgDisciplineTemps(notees){
+  if (!notees.length) return '<div class="vide">Aucune journée notée sur la plage.</div>';
+  var L = largeurGraphe(), H = Math.round(L * 0.26), mg = { h: 12, b: 28, g: 34, d: 12 };
+  var w = L - mg.g - mg.d, h = H - mg.h - mg.b;
+  var Y = function(v){ return mg.h + h - h * v / 10; };
+  var pas = w / notees.length, larg = Math.max(3, Math.min(30, pas * 0.66));
+  var s = '<svg viewBox="0 0 ' + L + ' ' + H + '" style="width:100%;height:auto;display:block">';
+  [4, 7].forEach(function(seuil){
+    s += '<line x1="' + mg.g + '" y1="' + Y(seuil + 0.5).toFixed(1) + '" x2="' + (L - mg.d) + '" y2="' + Y(seuil + 0.5).toFixed(1) +
+      '" stroke="var(--bord2)" stroke-dasharray="3 5"/>';
+  });
+  [1, 5, 10].forEach(function(v){
+    s += '<text x="' + (mg.g - 6) + '" y="' + (Y(v) + 4).toFixed(1) + '" fill="var(--texte3)" font-size="12" text-anchor="end">' + v + '</text>';
+  });
+  var moy = [];
+  notees.forEach(function(x, i){
+    var cx = mg.g + pas * (i + 0.5);
+    s += '<rect x="' + (cx - larg / 2).toFixed(1) + '" y="' + Y(x.note).toFixed(1) + '" width="' + larg.toFixed(1) + '" height="' + (Y(0) - Y(x.note)).toFixed(1) +
+      '" rx="2" fill="' + COULEUR_NIVEAU[classeNiveau(x.note)] + '" opacity=".8" data-bulle="' +
+      ech(fmtJourLong(x.cle) + ' : ' + x.note + '/10' + (x.nb ? ', ' + signe(x.net, 0) : ', pas de trade')) + '"/>';
+    var fen = notees.slice(Math.max(0, i - 4), i + 1);
+    moy.push((i ? 'L' : 'M') + cx.toFixed(1) + ' ' + Y(moyenneDe(fen.map(function(f){ return f.note; }))).toFixed(1));
+  });
+  if (notees.length > 2) s += '<path d="' + moy.join(' ') + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>';
+  s += '<text x="' + mg.g + '" y="' + (H - 6) + '" fill="var(--texte3)" font-size="12">' + fmtDate(jourDepuisCle(notees[0].cle).getTime(), false) + '</text>';
+  s += '<text x="' + (L - mg.d) + '" y="' + (H - 6) + '" fill="var(--texte3)" font-size="12" text-anchor="end">' +
+    fmtDate(jourDepuisCle(notees[notees.length - 1].cle).getTime(), false) + '</text>';
+  return s + '</svg>';
+}
+
+// deux courbes de capital journee par journee : la vraie, et celle sans les jours a 4 ou moins
+function svgDeuxCourbes(c){
+  if (c.length < 2) return '';
+  var L = largeurGraphe(), H = Math.round(L * 0.3), mg = { h: 14, b: 28, g: 62, d: 12 };
+  var w = L - mg.g - mg.d, h = H - mg.h - mg.b;
+  var vals = [0];
+  c.forEach(function(p){ vals.push(p.reelle, p.sansBasse); });
+  var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
+  if (vmax === vmin) { vmax += 1; vmin -= 1; }
+  var marge = (vmax - vmin) * 0.08; vmin -= marge; vmax += marge;
+  var X = function(i){ return mg.g + w * i / (c.length - 1); };
+  var Y = function(v){ return mg.h + h - h * (v - vmin) / (vmax - vmin); };
+  var trace = function(k){ return c.map(function(p, i){ return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p[k]).toFixed(1); }).join(' '); };
+  var s = '<svg viewBox="0 0 ' + L + ' ' + H + '" style="width:100%;height:auto;display:block">';
+  for (var k = 0; k <= 4; k++) {
+    var v = vmin + (vmax - vmin) * k / 4, y = Y(v);
+    s += '<line x1="' + mg.g + '" y1="' + y.toFixed(1) + '" x2="' + (L - mg.d) + '" y2="' + y.toFixed(1) + '" stroke="var(--bord)"/>' +
+      '<text x="' + (mg.g - 8) + '" y="' + (y + 4).toFixed(1) + '" fill="var(--texte3)" font-size="12" text-anchor="end">' + fmtNombre(v, 0) + '</text>';
+  }
+  s += '<path d="' + trace('sansBasse') + '" fill="none" stroke="var(--vert)" stroke-width="2.5" stroke-dasharray="8 5"/>';
+  s += '<path d="' + trace('reelle') + '" fill="none" stroke="var(--texte2)" stroke-width="2.5"/>';
+  c.forEach(function(p, i){
+    if (p.note !== null && p.note <= 4) {
+      s += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.reelle).toFixed(1) + '" r="5" fill="var(--rouge)" data-bulle="' +
+        ech(fmtJourLong(p.cle) + ' : discipline ' + p.note + '/10') + '"/>';
+    }
+  });
+  s += '<text x="' + mg.g + '" y="' + (H - 6) + '" fill="var(--texte3)" font-size="12">' + fmtDate(jourDepuisCle(c[0].cle).getTime(), false) + '</text>';
+  s += '<text x="' + (L - mg.d) + '" y="' + (H - 6) + '" fill="var(--texte3)" font-size="12" text-anchor="end">' +
+    fmtDate(jourDepuisCle(c[c.length - 1].cle).getTime(), false) + '</text>';
+  return s + '</svg>';
+}
+
+function rendreDiscipline(){
+  var trades = tradesActifs();
+  var s = statsDeTrades(trades);
+  var jours = Object.keys(E.jours).filter(function(c){ return dansPlage(jourDepuisCle(c).getTime()); })
+    .map(function(c){ return E.jours[c]; });
+  var an = analyseDiscipline(jours, s.jours, { reglages: E.reglages, criteres: E.reglages.criteresDiscipline });
+  var aq = analyseQualite(trades);
+  var haute = an.niveaux[0], moyenne = an.niveaux[1], basse = an.niveaux[2];
+  var moyOuTiret = function(v){ return v === null ? '--' : signe(v, 0); };
+  var html = '';
+
+  html += '<div class="avis bleuf">Chaque soir, dans le <b>Journal quotidien</b>, tu te donnes une note de discipline de 1 à 10. ' +
+    'Ici, l\'app compare ce que tu gagnes les jours où tu es discipliné et les autres jours. ' +
+    '<b>Élevée</b> = 8 à 10 (ton A-game), <b>moyenne</b> = 5 à 7, <b>basse</b> = 1 à 4. ' +
+    'La plage de dates en haut s\'applique ici aussi.</div>';
+
+  if (!an.nbNotees) {
+    html += '<div class="vide" style="margin-bottom:14px"><b>Aucune journée notée sur cette plage.</b><br>' +
+      'Ouvre le Journal quotidien, carte <b>Discipline du jour</b>, et donne-toi une note ce soir. ' +
+      'Dès 5 journées notées, cet écran te dit ce que ta discipline te rapporte.</div>';
+  }
+
+  if (an.nbNotees) {
+    var corr = an.correlation;
+    html += '<div class="grille g4" style="margin-bottom:14px">' +
+      chiffre('Discipline moyenne', '<span class="' + ({ h: 'vert', m: '', b: 'rouge' })[classeNiveau(Math.round(an.moyenne))] + '">' +
+        fmtNombre(an.moyenne, 1) + '</span><span class="gris" style="font-size:15px"> /10</span>',
+        an.nbNotees + ' journée(s) notée(s), dont ' + an.nbNoteesTradees + ' tradée(s)') +
+      chiffre('Série en cours', an.serieActuelle + ' <span class="gris" style="font-size:15px">jour' + (an.serieActuelle > 1 ? 's' : '') + ' à 8+</span>',
+        'record : ' + an.meilleureSerie + ' de suite. Un jour sans note ne casse pas la série.') +
+      chiffre('Un point de discipline vaut', an.pente === null ? '--' : signe(an.pente, 0),
+        an.pente === null ? 'il faut 3 journées notées et tradées, avec des notes différentes'
+          : 'par jour, droite de tendance' + (corr !== null && Math.abs(corr) < 0.25 ? ' (lien encore faible)' : ''),
+        an.pente === null ? '' : cls(an.pente)) +
+      chiffre('Journées à noter', an.sansNote.length, an.sansNote.length ? 'tradées sans note, liste en bas' : 'tout est noté', an.sansNote.length ? 'rouge' : 'vert') +
+    '</div>';
+
+    // ---- le verdict, en une phrase ----
+    var verdict = '';
+    if (haute.nbJours && basse.nbJours) {
+      verdict = 'Les jours où tu te mets <b>8 ou plus</b>, tu fais en moyenne <b class="' + cls(haute.moyenneJour) + '">' + signe(haute.moyenneJour, 0) +
+        '</b> par jour (' + haute.nbJours + ' jour' + (haute.nbJours > 1 ? 's' : '') + '). ' +
+        'Les jours à <b>4 ou moins</b> : <b class="' + cls(basse.moyenneJour) + '">' + signe(basse.moyenneJour, 0) + '</b> par jour (' +
+        basse.nbJours + ' jour' + (basse.nbJours > 1 ? 's' : '') + '). ' +
+        'Écart : <b class="' + cls(haute.moyenneJour - basse.moyenneJour) + '">' + signe(haute.moyenneJour - basse.moyenneJour, 0) + ' par jour</b>.';
+      if (haute.tradesParJour !== null && basse.tradesParJour !== null) {
+        verdict += ' Tu prends <b>' + fmtNombre(haute.tradesParJour, 1) + '</b> trade(s) par jour quand tu es discipliné, contre <b>' +
+          fmtNombre(basse.tradesParJour, 1) + '</b> les autres jours.';
+      }
+    } else if (an.nbNoteesTradees) {
+      verdict = 'Pour comparer, il faut au moins une journée à 8 ou plus <b>et</b> une journée à 4 ou moins sur la plage. ' +
+        'Pour l\'instant : ' + haute.nbJours + ' élevée(s), ' + moyenne.nbJours + ' moyenne(s), ' + basse.nbJours + ' basse(s). ' +
+        'Note-toi honnêtement, même les mauvais jours : ce sont eux qui donnent le chiffre.';
+    }
+    if (verdict) {
+      if (an.nbNoteesTradees < 10) verdict += '<div class="gris petit" style="margin-top:6px">' + an.nbNoteesTradees +
+        ' journée(s) tradée(s) notée(s), c\'est encore peu pour conclure. Le chiffre devient solide vers 20.</div>';
+      html += '<div class="carte"><div class="verdict">' + verdict + '</div></div>';
+    }
+
+    // ---- les trois niveaux ----
+    html += '<div class="niveaux3" style="margin-bottom:14px">' + an.niveaux.map(function(nv){
+      var c = ({ haute: 'h', moyenne: 'm', basse: 'b' })[nv.cle];
+      var ligne = function(k, v, cl){ return '<tr><td class="gris">' + k + '</td><td class="num ' + (cl || '') + '">' + v + '</td></tr>'; };
+      return '<div class="niveau-carte ' + c + '">' +
+        '<h4 style="margin-bottom:4px">Discipline ' + nv.nom.toLowerCase() + ' <span class="gris">' + nv.min + ' à ' + nv.max + '</span></h4>' +
+        (nv.nbJours ?
+          '<div class="grand ' + cls(nv.moyenneJour) + '">' + signe(nv.moyenneJour, 0) + '</div>' +
+          '<div class="petit gris" style="margin-bottom:8px">par jour en moyenne, sur ' + nv.nbJours + ' journée(s)</div>' +
+          '<table><tbody>' +
+            ligne('Profit total', signe(nv.net, 0), cls(nv.net)) +
+            ligne('Journées vertes', nv.joursVerts + ' / ' + nv.nbJours + ' (' + fmtNombre(nv.tauxJoursVerts * 100, 0) + ' %)') +
+            ligne('Taux de réussite des trades', nv.tauxReussite === null ? '--' : fmtNombre(nv.tauxReussite * 100, 0) + ' %') +
+            ligne('Trades par jour', fmtNombre(nv.tradesParJour, 1)) +
+            ligne('Perte moyenne', nv.moyennePerte === null ? '--' : fmtArgent(-nv.moyennePerte, 0), 'rouge') +
+            ligne('Pire journée', fmtArgent(nv.pireJour, 0), cls(nv.pireJour)) +
+            ligne('Jours hors limites', nv.joursHorsLimites, nv.joursHorsLimites ? 'rouge' : '') +
+          '</tbody></table>'
+          : '<div class="petit gris" style="padding:18px 0">Aucune journée tradée à ce niveau sur la plage.</div>') +
+        '</div>';
+    }).join('') + '</div>';
+
+    // ---- graphiques ----
+    html += '<div class="carte"><h3>Profit du jour selon ta note</h3>' + svgNuageDiscipline(an) +
+      '<div class="petit gris" style="margin-top:6px">Une pastille par journée. La barre pâle est la moyenne de la note. ' +
+      (an.pente !== null ? 'Les pointillés bleus sont la tendance : s\'ils montent vers la droite, ta discipline paie.' : '') + '</div></div>';
+    html += '<div class="carte"><h3>Ta discipline dans le temps</h3>' + svgDisciplineTemps(an.notees) +
+      '<div class="petit gris" style="margin-top:6px">La ligne bleue est la moyenne de tes 5 dernières notes. Ce qui compte, c\'est qu\'elle monte.</div></div>';
+
+    if (an.whatIf) {
+      var fuite = an.whatIf.sansBasse - an.whatIf.total;
+      html += '<div class="carte"><h3>Ce que te coûtent tes jours indisciplinés</h3>' +
+        '<div class="verdict" style="margin-bottom:10px">Sans tes <b>' + an.whatIf.nbJours + '</b> journée(s) à discipline basse, ton résultat sur la plage serait de ' +
+        '<b class="' + cls(an.whatIf.sansBasse) + '">' + signe(an.whatIf.sansBasse, 0) + '</b> au lieu de <b class="' + cls(an.whatIf.total) + '">' +
+        signe(an.whatIf.total, 0) + '</b>. ' +
+        (fuite > 0 ? 'Ta fuite de discipline : <b class="rouge">' + fmtArgent(fuite, 0) + '</b>.' : 'Tes jours bas ne t\'ont rien coûté cette fois, ne compte pas dessus.') + '</div>' +
+        svgDeuxCourbes(an.courbes) +
+        '<div class="petit gris" style="margin-top:6px">Trait plein : ta vraie courbe. Pointillés verts : la même sans les journées notées 4 ou moins (points rouges).</div></div>';
+    }
+  }
+
+  // ---- ce que coute chaque erreur ----
+  if (an.erreurs.length) {
+    var pire = an.erreurs[0];
+    html += '<div class="carte"><h3>Ce que te coûtent tes erreurs</h3>' +
+      (pire.ecart !== null && pire.ecart < 0 ? '<div class="avis rougef">Ton erreur la plus chère : <b>' + ech(pire.nom) + '</b>. ' +
+        'Les jours où tu la fais, tu gagnes <b>' + fmtArgent(-pire.ecart, 0) + ' de moins</b> par jour que les jours sans. ' +
+        'C\'est ta priorité : une seule erreur à la fois.</div>' : '') +
+      '<div class="tableau-boite"><table><thead><tr><th style="min-width:200px">Erreur</th><th class="num">Journées</th>' +
+      '<th class="num">Profit ces jours-là</th><th class="num">Moyenne avec</th><th class="num">Moyenne sans</th><th class="num">Écart par jour</th>' +
+      '</tr></thead><tbody>' + an.erreurs.map(function(e){
+        return '<tr><td style="white-space:normal">' + ech(e.nom) + '</td><td class="num">' + e.nbJours + '</td>' +
+          '<td class="num ' + cls(e.netAvec) + '">' + signe(e.netAvec, 0) + '</td>' +
+          '<td class="num ' + cls(e.moyenneAvec) + '">' + moyOuTiret(e.moyenneAvec) + '</td>' +
+          '<td class="num ' + cls(e.moyenneSans) + '">' + moyOuTiret(e.moyenneSans) + '</td>' +
+          '<td class="num gras ' + cls(e.ecart) + '">' + (e.ecart === null ? '<span class="gris">il manque des jours sans</span>' : signe(e.ecart, 0)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="petit gris" style="margin-top:8px">Sur les journées tradées où la carte Discipline est remplie (' +
+      an.joursSansErreur + ' sans aucune erreur). Une journée avec deux erreurs compte dans les deux lignes.</div></div>';
+  } else if (an.nbNotees) {
+    html += '<div class="carte"><h3>Ce que te coûtent tes erreurs</h3><div class="petit gris">Aucune erreur cochée sur la plage. ' +
+      'Coche-les dans la carte Discipline du jour : c\'est ce qui permet de dire laquelle te coûte le plus.</div></div>';
+  }
+
+  // ---- les regles du jour ----
+  if (an.criteres.length) {
+    html += '<div class="carte"><h3>Tes règles du jour</h3><div class="tableau-boite"><table><thead><tr>' +
+      '<th style="min-width:220px">Règle</th><th class="num">Respectée</th><th class="num">Moyenne si respectée</th>' +
+      '<th class="num">Moyenne si violée</th><th class="num">Écart par jour</th></tr></thead><tbody>' +
+      an.criteres.map(function(c){
+        return '<tr><td style="white-space:normal">' + ech(c.texte) + '</td>' +
+          '<td class="num">' + c.nbOui + ' / ' + (c.nbOui + c.nbNon) + ' <span class="gris">(' + fmtNombre(c.tauxRespect * 100, 0) + ' %)</span></td>' +
+          '<td class="num ' + cls(c.moyenneOui) + '">' + moyOuTiret(c.moyenneOui) + '</td>' +
+          '<td class="num ' + cls(c.moyenneNon) + '">' + moyOuTiret(c.moyenneNon) + '</td>' +
+          '<td class="num gras ' + cls(c.ecart) + '">' + (c.ecart === null ? '<span class="gris">il manque des cas</span>' : signe(c.ecart, 0)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="petit gris" style="margin-top:8px">Un écart positif veut dire que la règle te rapporte de l\'argent quand tu la tiens. Vise 90 % de respect sur chacune.</div></div>';
+  }
+
+  // ---- l'etat avant la seance ----
+  var etatsAvecDonnees = ETATS_AVANT.filter(function(e){
+    return an.etat[e.cle].some(function(p){ return p.nbJours; });
+  });
+  if (etatsAvecDonnees.length) {
+    html += '<div class="carte"><h3>Ton état avant la séance</h3><div class="grille g3">' +
+      etatsAvecDonnees.map(function(e){
+        return '<div><h4>' + e.nom + '</h4>' + barres(an.etat[e.cle].filter(function(p){ return p.nbJours; }).map(function(p){
+          return { etq: p.niveau + (p.niveau === 1 ? ' (' + e.bas + ')' : (p.niveau === 5 ? ' (' + e.haut + ')' : '')), val: p.moyenneJour, extra: p.nbJours + ' j.' };
+        })) + '</div>';
+      }).join('') + '</div>' +
+      '<div class="petit gris" style="margin-top:6px">Profit moyen par jour selon ce que tu as noté le matin. Si les jours à 1 ou 2 sont rouges, ' +
+      'la règle s\'écrit toute seule : ces matins-là, taille réduite ou pas de trade.</div></div>';
+  }
+
+  // ---- l'objectif de la veille ----
+  var ob = an.objectifs;
+  if (ob && ob.tenus + ob.pasTenus) {
+    html += '<div class="carte"><h3>Ton objectif de la veille</h3><div class="verdict">Tenu <b>' + ob.tenus + '</b> fois sur <b>' +
+      (ob.tenus + ob.pasTenus) + '</b> (' + fmtNombre(ob.tenus / (ob.tenus + ob.pasTenus) * 100, 0) + ' %). ' +
+      (ob.moyenneTenu !== null ? 'Quand tu le tiens : <b class="' + cls(ob.moyenneTenu) + '">' + signe(ob.moyenneTenu, 0) + '</b> par jour. ' : '') +
+      (ob.moyennePasTenu !== null ? 'Quand tu ne le tiens pas : <b class="' + cls(ob.moyennePasTenu) + '">' + signe(ob.moyennePasTenu, 0) + '</b>.' : '') +
+      '</div><div class="petit gris" style="margin-top:6px">L\'objectif du jour est la leçon écrite la veille. Une seule chose à la fois, comme le font Steenbarger et Breitstein.</div></div>';
+  }
+
+  // ---- qualite du setup ----
+  if (aq.nbNotes) {
+    var gq = aq.groupes.filter(function(g){ return g.nb; }).map(function(g){
+      return { cle: g.qualite, nb: g.nb, taux: g.taux, net: g.net, moyenne: g.moyenne, moyenneR: g.moyenneR, facteur: g.facteur };
+    });
+    html += '<div class="carte"><h3>Et si tu n\'avais pris que tes A+ et tes A ?</h3>' +
+      '<div class="verdict" style="margin-bottom:10px">Sur tes <b>' + aq.nbNotes + '</b> trades notés, résultat : <b class="' + cls(aq.netNotes) + '">' +
+      signe(aq.netNotes, 0) + '</b>. Avec seulement les A+ et A (' + aq.nbBons + ' trades) : <b class="' + cls(aq.netBons) + '">' + signe(aq.netBons, 0) + '</b>' +
+      (aq.nbBons ? ', avec un recul maximal de ' + fmtArgent(-aq.ddBons, 0) + ' au lieu de ' + fmtArgent(-aq.ddNotes, 0) : '') + '.</div>' +
+      tableauGroupes(gq, 'Qualité') +
+      '<div class="petit gris" style="margin-top:8px">La qualité se note dans le détail de chaque trade. Note-la comme tu la voyais AVANT d\'entrer, pas après le résultat.</div></div>';
+  } else if (an.nbNotees) {
+    html += '<div class="carte"><h3>Et si tu n\'avais pris que tes A+ et tes A ?</h3><div class="petit gris">Aucun trade noté A+, A, B ou C sur la plage. ' +
+      'Ouvre un trade dans l\'onglet Trades et choisis sa <b>qualité du setup</b> : l\'app calculera ce que tes B et tes C te coûtent.</div></div>';
+  }
+
+  // ---- la note contre les chiffres ----
+  if (an.ecarts.length) {
+    html += '<div class="carte"><h3>Ta note contre les chiffres</h3>' +
+      '<div class="petit gris" style="margin-bottom:8px">Des journées où tu t\'es mis 8 ou plus alors que tes trades disent autre chose. ' +
+      'Ce n\'est pas un reproche : c\'est là que l\'analyse peut se tromper si la note est trop gentille.</div>' +
+      '<div class="liste-pieces">' + an.ecarts.slice().reverse().slice(0, 12).map(function(x){
+        return '<div class="piece" data-vers-jour="' + x.cle + '"><div style="flex:1 1 auto"><div class="t">' + fmtJourLong(x.cle) + '</div>' +
+          '<div class="d">' + x.fautes.map(function(f){ return ech(f.texte); }).join(' ; ') + '</div></div>' +
+          pastilleDiscipline(x.note) + '<div class="' + cls(x.net) + ' gras nowrap">' + signe(x.net, 0) + '</div></div>';
+      }).join('') + '</div></div>';
+  }
+
+  // ---- les journees a noter ----
+  if (an.sansNote.length) {
+    html += '<div class="carte"><h3>Journées tradées sans note de discipline <span class="puce r">' + an.sansNote.length + '</span></h3>' +
+      '<div class="petit gris" style="margin-bottom:8px">Clic sur une journée pour la noter. Plus il y en a de notées, plus le verdict est fiable.</div>' +
+      '<div class="liste-pieces">' + an.sansNote.slice(0, 15).map(function(c){
+        var pj = s.jours[c];
+        return '<div class="piece" data-vers-jour="' + c + '"><div style="flex:1 1 auto"><div class="t">' + fmtJourLong(c) + '</div>' +
+          '<div class="d">' + pj.nb + ' trade' + (pj.nb > 1 ? 's' : '') + '</div></div>' +
+          '<div class="' + cls(pj.net) + ' gras nowrap">' + signe(pj.net, 0) + '</div></div>';
+      }).join('') + (an.sansNote.length > 15 ? '<div class="petit gris">... et ' + (an.sansNote.length - 15) + ' autre(s).</div>' : '') +
+      '</div></div>';
+  }
+
+  $('#discContenu').innerHTML = html;
+  $$('#discContenu [data-vers-jour]').forEach(function(d){
+    d.onclick = function(){ E.journalDate = d.dataset.versJour; allerA('journal'); };
+  });
 }
 
 /* =======================================================================
@@ -3574,6 +4621,7 @@ function rendreReglages(){
     };
   });
 
+  rendreDisciplineReglages();
   rendreProfilReglages();
 
   var octets = 0;
@@ -3590,6 +4638,50 @@ function rendreReglages(){
     e.textContent += ' ' + imgs.length + ' photo(s) : ' + fmtOctets(poids) + '.' +
       (poids ? ' La sauvegarde JSON fera environ ' + fmtOctets(octets + poids * 1.37) +
                ' (les photos y sont encodees en texte, ce qui les alourdit d\'un tiers).' : '');
+  });
+}
+
+/* ---------- carte Discipline dans les Réglages ---------- */
+function rendreDisciplineReglages(){
+  var r = E.reglages;
+  $('#rgHeures').value = r.heuresPermises || '';
+  // une regle se renomme sur place : son identifiant ne change pas, l'historique suit
+  $('#rgCriteres').innerHTML = r.criteresDiscipline.length ? r.criteresDiscipline.map(function(c, i){
+    return '<div style="display:flex;gap:6px;margin-bottom:6px">' +
+      '<input value="' + ech(c.text) + '" data-cr-txt="' + i + '" style="flex:1 1 auto">' +
+      '<button class="pt dangereux" data-cr-sup="' + i + '" title="retirer">&#10005;</button></div>';
+  }).join('') : '<div class="petit gris">Aucune règle.</div>';
+  $$('[data-cr-txt]').forEach(function(inp){
+    inp.onchange = async function(){
+      var v = inp.value.trim();
+      if (!v) { rendreDisciplineReglages(); return; }
+      r.criteresDiscipline[+inp.dataset.crTxt].text = v;
+      await dbMettre('reglages', r);
+      toast('Règle renommée.', 'vertf');
+    };
+  });
+  $$('[data-cr-sup]').forEach(function(b){
+    b.onclick = async function(){
+      var c = r.criteresDiscipline[+b.dataset.crSup];
+      if (!await confirmer('Retirer la règle <b>' + ech(c.text) + '</b> ? Les journées déjà remplies gardent leur réponse, ' +
+        'mais elle n\'apparaîtra plus dans la carte du jour ni dans l\'analyse.', 'Retirer')) return;
+      r.criteresDiscipline.splice(+b.dataset.crSup, 1);
+      await dbMettre('reglages', r);
+      rendreDisciplineReglages();
+    };
+  });
+  $('#rgErreurs').innerHTML = r.erreursDiscipline.map(function(x){
+    var n = Object.keys(E.jours).filter(function(c){ return (E.jours[c].erreurs || []).indexOf(x) >= 0; }).length;
+    return '<span class="etq-choix" style="cursor:default">' + ech(x) +
+      (n ? ' <span class="gris mini">' + n + ' j.</span>' : '') +
+      ' <button class="fantome pt" data-err-sup="' + ech(x) + '" style="padding:0 2px;font-size:11px">&#10005;</button></span>';
+  }).join('');
+  $$('[data-err-sup]').forEach(function(b){
+    b.onclick = async function(){
+      r.erreursDiscipline = r.erreursDiscipline.filter(function(x){ return x !== b.dataset.errSup; });
+      await dbMettre('reglages', r);
+      rendreDisciplineReglages();
+    };
   });
 }
 
@@ -4303,7 +5395,7 @@ function lancerAutotest(){
     '-2,75 point x 3 x 5 $ = -41,25 $ moins 4,50 $ de commissions sur MES, et 48,75 points x 4 x 2 $ = 390 $ moins 6 $ sur MNQ. ' +
     'Les fills qui manquent doivent donc peser -440,00 $. Importe le CSV complet : si le total affiche par le journal ' +
     'n\'est pas -101,75 $, c\'est le fichier ou un multiplicateur qu\'il faut regarder, le calcul lui-même est vérifié ' +
-    'par 57 tests dans <b>verifier-moteur.cjs</b> (commande : node verifier-moteur.cjs).</div>';
+    'par 107 tests dans <b>verifier-moteur.cjs</b> (commande : node verifier-moteur.cjs).</div>';
   $('#sortieAutotest').innerHTML = html;
 }
 
@@ -4389,7 +5481,10 @@ function brancher(){
   // journal
   $('#journalDate').onchange = function(){ E.journalDate = this.value || cleJour(Date.now()); rendreJournal(); };
   $('#btnJournalAuj').onclick = function(){ E.journalDate = cleJour(Date.now()); rendreJournal(); };
-  $('#btnJournalEnr').onclick = enregistrerJournal;
+  $('#btnJournalEnr').onclick = function(){ enregistrerJournal(false); };
+  // le texte s'enregistre aussi tout seul : changer de date ne perd plus rien
+  $('#journalBiais').oninput = function(){ sauverJournalBientot(1000); };
+  $('#journalBilan').oninput = function(){ sauverJournalBientot(1000); };
 
   // carnet
   $('#carnetDossier').onchange = function(){ E.carnetDossier = this.value; rendreCarnet(); };
@@ -4452,6 +5547,45 @@ function brancher(){
     rendreReglages();
     toast('Liste ICT remise.', 'vertf');
   };
+  // discipline
+  $('#rgHeures').onchange = async function(){
+    var v = this.value.trim();
+    if (v && !lirePlagesHoraires(v).length) { toast('Je n\'arrive pas à lire ces heures. Écris par exemple 08:30-11:00, 13:30-16:00', 'rougef'); return; }
+    E.reglages.heuresPermises = v;
+    await dbMettre('reglages', E.reglages);
+    toast(v ? 'Heures enregistrées : ' + ech(v) : 'Heures de trading retirées, plus de vérification.', 'vertf');
+  };
+  $('#btnAjoutCritere').onclick = async function(){
+    var v = $('#nvCritere').value.trim();
+    if (!v) return;
+    E.reglages.criteresDiscipline.push({ id: 'cr-' + uid(), text: v });
+    await dbMettre('reglages', E.reglages);
+    $('#nvCritere').value = '';
+    rendreDisciplineReglages();
+  };
+  $('#nvCritere').onkeydown = function(e){ if (e.key === 'Enter') $('#btnAjoutCritere').click(); };
+  $('#btnAjoutErreur').onclick = async function(){
+    var v = $('#nvErreur').value.trim();
+    if (!v) return;
+    if (E.reglages.erreursDiscipline.indexOf(v) < 0) E.reglages.erreursDiscipline.push(v);
+    await dbMettre('reglages', E.reglages);
+    $('#nvErreur').value = '';
+    rendreDisciplineReglages();
+  };
+  $('#nvErreur').onkeydown = function(e){ if (e.key === 'Enter') $('#btnAjoutErreur').click(); };
+  $('#btnDiscDefaut').onclick = async function(){
+    // on ajoute ce qui manque, sans rien retirer de ce que Julien a cree
+    CRITERES_DEFAUT.forEach(function(c){
+      if (!E.reglages.criteresDiscipline.some(function(x){ return x.id === c.id; })) E.reglages.criteresDiscipline.push(Object.assign({}, c));
+    });
+    ERREURS_DEFAUT.forEach(function(x){
+      if (E.reglages.erreursDiscipline.indexOf(x) < 0) E.reglages.erreursDiscipline.push(x);
+    });
+    await dbMettre('reglages', E.reglages);
+    rendreDisciplineReglages();
+    toast('Listes d\'origine remises.', 'vertf');
+  };
+
   $('#btnAutotest').onclick = lancerAutotest;
   $('#btnToutEffacer').onclick = async function(){
     if (!await confirmer('<b>Tout effacer</b> : fills, trades, notes, captures, playbooks, journal et réglages. Exporte une sauvegarde avant si tu veux pouvoir revenir en arriere.', 'Tout effacer')) return;

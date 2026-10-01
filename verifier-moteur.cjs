@@ -27,7 +27,9 @@ const code = source.slice(source.indexOf('*/', iDebut) + 2, iFin);
 const M = new Function(code + `
   return { MULTIPLICATEURS_DEFAUT, racineSymbole, versNombre, versDate, parserCSV,
            lireFillsDepuisCSV, regrouperEnTrades, statsDeTrades, noteGlobale,
-           rRealise, rPlanifie, risqueDollars, fmtArgent, multiplicateurDe };
+           rRealise, rPlanifie, risqueDollars, fmtArgent, multiplicateurDe,
+           analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
+           lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -209,6 +211,110 @@ verifier('nombre de journees', st.nbJours, 3);
 verifier('profit du 2 septembre', st.jours['2026-09-02'].net, 150);
 verifier('recul maximal (drawdown)', st.ddMax, 50);
 verifier('R obtenu du trade a (risque 2 pt x 1 x 5 $ = 10 $)', M.rRealise(tradesTest[0]), 10);
+
+titre('12. Discipline : vengeance detectee sur les heures');
+const h = s => new Date('2026-09-10T' + s).getTime();
+const tv = (cle, ouv, ferm, net, qte) => ({ cle, ouverture: h(ouv), fermeture: h(ferm), net, brut: net, qte, commission: 0 });
+const perte1 = tv('p1', '09:50:00', '10:00:00', -100, 2);
+const repriseRapide = tv('r1', '10:03:00', '10:10:00', -80, 2);   // 3 min apres une perte, meme taille
+const repriseLente = tv('r2', '10:30:00', '10:40:00', 50, 3);      // 20 min apres : pas suspect
+const plusPetit = tv('r3', '10:42:00', '10:45:00', 20, 1);         // apres un gain : pas suspect
+let susp = M.tradesSuspectsVengeance([perte1, repriseRapide, repriseLente, plusPetit]);
+verifier('une seule reprise suspecte', susp.length, 1);
+verifier('c\'est bien le trade de 10:03', susp[0].trade.cle, 'r1');
+verifier('3 minutes apres la perte', susp[0].minutes, 3);
+const perte2 = tv('p2', '11:00:00', '11:05:00', -50, 3);
+const reduite = tv('r4', '11:06:00', '11:09:00', 10, 1);            // taille reduite : pas suspect
+verifier('taille reduite apres une perte : pas suspect',
+  M.tradesSuspectsVengeance([perte2, reduite]).length, 0);
+
+titre('13. Discipline : les faits du jour');
+const rgD = { perteJourMax: 150, tradesJourMax: 3, compte: 25000, risqueMaxPct: 1 };
+const jourD = { net: -130, nb: 4, trades: [perte1, repriseRapide, repriseLente, plusPetit] };
+const faits = M.faitsDiscipline(jourD, rgD);
+const fait = cle => faits.filter(f => f.cle === cle)[0];
+verifier('perte max respectee (-130 contre -150)', fait('perte').ok, true);
+verifier('4 trades pour 3 permis : faute', fait('nombre').ok, false);
+verifier('reprise precipitee : faute', fait('vengeance').ok, false);
+verifier('sans stop renseigne, pas de ligne stop', fait('stop'), undefined);
+
+titre('14. Discipline : haute contre basse');
+const J = (date, note, net, extra) => Object.assign({ date, discipline: note }, extra || {});
+const pj = (net, nb) => ({ net, nb, trades: Array.from({ length: nb }, (_, i) => ({
+  cle: 'x' + Math.random(), net: net / nb, brut: net / nb, commission: 0, qte: 1,
+  ouverture: h('10:00:00') + i * 3600000, fermeture: h('10:30:00') + i * 3600000 })) });
+const joursD = [
+  J('2026-09-01', 9, 0, { erreurs: [], criteres: { a: true } }),
+  J('2026-09-02', 8, 0, { erreurs: [], criteres: { a: true } }),
+  J('2026-09-03', 3, 0, { erreurs: ['FOMO'], criteres: { a: false } }),
+  J('2026-09-04', 2, 0, { erreurs: ['FOMO', 'Vengeance'], criteres: { a: false } }),
+  J('2026-09-05', 6, 0, { erreurs: [], criteres: { a: true } }),
+  J('2026-09-06', 10, 0),                                   // notee mais pas tradee
+  { date: '2026-09-07', biais: 'rien' }                     // pas notee
+];
+const parJourD = {
+  '2026-09-01': pj(200, 2), '2026-09-02': pj(100, 1), '2026-09-03': pj(-150, 3),
+  '2026-09-04': pj(-250, 5), '2026-09-05': pj(50, 1), '2026-09-07': pj(30, 1)
+};
+const an = M.analyseDiscipline(joursD, parJourD, { reglages: {}, criteres: [{ id: 'a', text: 'Plan suivi' }] });
+const niv = cle => an.niveaux.filter(n => n.cle === cle)[0];
+verifier('6 journees notees', an.nbNotees, 6);
+verifier('5 journees notees ET tradees', an.nbNoteesTradees, 5);
+verifier('discipline moyenne (9+8+3+2+6+10)/6', an.moyenne, 38 / 6);
+verifier('haute : 2 journees', niv('haute').nbJours, 2);
+verifier('haute : +150 $ par jour', niv('haute').moyenneJour, 150);
+verifier('basse : -200 $ par jour', niv('basse').moyenneJour, -200);
+verifier('basse : 4 trades par jour', niv('basse').tradesParJour, 4);
+verifier('moyenne : +50 $', niv('moyenne').moyenneJour, 50);
+verifier('pente positive (un point de discipline rapporte)', an.pente > 0, true);
+verifier('correlation forte', an.correlation > 0.9, true);
+verifier('serie actuelle a 8+ (le 10 du 6 sept.)', an.serieActuelle, 1);
+verifier('meilleure serie a 8+', an.meilleureSerie, 2);
+const fomo = an.erreurs.filter(e => e.nom === 'FOMO')[0];
+verifier('FOMO : 2 journees', fomo.nbJours, 2);
+verifier('FOMO : -200 $ par jour avec', fomo.moyenneAvec, -200);
+verifier('FOMO : ecart contre les jours sans (-200 - 116,67)', fomo.ecart, -200 - 350 / 3);
+verifier('regle "Plan suivi" : respectee 3 fois', an.criteres[0].nbOui, 3);
+verifier('regle "Plan suivi" : ecart par jour', an.criteres[0].ecart, 350 / 3 + 200);
+verifier('journee tradee sans note a remplir', JSON.stringify(an.sansNote), JSON.stringify(['2026-09-07']));
+verifier('et si : total sans les jours bas', an.whatIf.sansBasse, -20 + 400);
+verifier('niveau de 7 = moyenne', M.niveauDiscipline(7).cle, 'moyenne');
+verifier('niveau de 8 = haute', M.niveauDiscipline(8).cle, 'haute');
+verifier('courbe reelle a la fin = total', an.courbes[an.courbes.length - 1].reelle, -20);
+verifier('courbe sans les jours bas a la fin', an.courbes[an.courbes.length - 1].sansBasse, 380);
+
+titre('15. Discipline : heures permises et perte max');
+const pl = M.lirePlagesHoraires('08:30-11:00, 13h30-15h');
+verifier('deux plages lues', pl.length, 2);
+verifier('8:30 = 510 minutes', pl[0].debut, 510);
+verifier('15h = 900 minutes', pl[1].fin, 900);
+verifier('"9-11" sans les minutes', M.lirePlagesHoraires('9-11')[0].fin, 660);
+verifier('texte illisible ignore', M.lirePlagesHoraires('le matin').length, 0);
+verifier('10:03 est dans les heures', M.dansPlagesHoraires(h('10:03:00'), pl), true);
+verifier('12:00 est hors des heures', M.dansPlagesHoraires(h('12:00:00'), pl), false);
+verifier('11:00 pile est deja dehors', M.dansPlagesHoraires(h('11:00:00'), pl), false);
+// perte1 (-100) puis repriseRapide (-80) : -180 a 10:10, sous la limite de 150
+verifier('trades ouverts apres la perte max', M.tradesApresPerteMax([perte1, repriseRapide, repriseLente, plusPetit], 150)
+  .map(t => t.cle).join(','), 'r2,r3');
+verifier('limite jamais touchee : aucun', M.tradesApresPerteMax([perte1, repriseLente], 150).length, 0);
+const faits2 = M.faitsDiscipline(jourD, Object.assign({ heuresPermises: '10:00-10:35' }, rgD));
+verifier('fait "continue apres la perte max" present', faits2.some(f => f.cle === 'continue' && !f.ok), true);
+verifier('2 trades hors des heures 10:00-10:35', faits2.filter(f => f.cle === 'heures')[0].texte.indexOf('2 trade') === 0, true);
+
+titre('16. Qualite du setup et objectif de la veille');
+const tq = (q, net) => ({ cle: 'q' + Math.random(), qualite: q, net, brut: net, commission: 0, qte: 1, fermeture: h('10:00:00') });
+const aq = M.analyseQualite([tq('A+', 300), tq('A', 100), tq('B', -150), tq('C', -200), tq('C', 50), tq(undefined, 999)]);
+verifier('5 trades notes (le 6e ne l\'est pas)', aq.nbNotes, 5);
+verifier('tous les trades notes : +100', aq.netNotes, 100);
+verifier('seulement A+ et A : +400', aq.netBons, 400);
+verifier('les C : 2 trades', aq.groupes[3].nb, 2);
+const anObj = M.analyseDiscipline([
+  { date: '2026-09-01', objectifTenu: true }, { date: '2026-09-02', objectifTenu: true },
+  { date: '2026-09-03', objectifTenu: false }
+], { '2026-09-01': pj(100, 1), '2026-09-02': pj(50, 1), '2026-09-03': pj(-90, 2) }, {});
+verifier('objectif tenu 2 fois', anObj.objectifs.tenus, 2);
+verifier('profit moyen quand tenu', anObj.objectifs.moyenneTenu, 75);
+verifier('profit moyen quand pas tenu', anObj.objectifs.moyennePasTenu, -90);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

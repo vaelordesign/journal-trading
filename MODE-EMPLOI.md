@@ -217,7 +217,9 @@ dans le journal, après confirmation.
 - **Respect des règles** : pour chaque règle, ton résultat quand tu la respectes contre ton
   résultat quand tu la violes, et l'écart en dollars par trade. C'est l'écran le plus utile.
 - **Journal quotidien** : ton biais écrit *avant* la séance, ton bilan écrit après,
-  avec le profit du jour à côté.
+  avec le profit du jour à côté. En haut, la carte **Discipline du jour** (voir plus bas).
+  Tout s'y enregistre tout seul, le texte aussi : changer de date ne perd plus rien.
+- **Discipline** : l'analyse de tes notes de discipline (voir la section 6 bis).
 - **Carnet** : les notes qui ne sont pas rattachées à un trade (revue de semaine,
   préparation du lendemain, autopsie d'une erreur), avec des gabarits en un clic.
   Ctrl+V colle aussi les images.
@@ -226,9 +228,42 @@ dans le journal, après confirmation.
   **exclus** des statistiques réelles, sauf si tu coches « Inclure le backtest » en haut.
   Fais le rejeu de barres dans TradingView (Bar Replay, gratuit) et note les résultats ici.
 
+## 6 bis. La discipline
+
+**Chaque matin**, avant d'ouvrir un trade, dans le Journal quotidien :
+1. Note ton état de 1 à 5 : sommeil, énergie, calme.
+2. Si tu as écrit une leçon la veille, elle s'affiche comme **objectif du jour**.
+3. Écris ton biais (les consignes grises te guident : biais, liquidité visée, niveaux,
+   killzone, perte max, scénarios).
+
+**Chaque soir** :
+1. Réponds Oui ou Non à chacune de tes **règles du jour**. À moitié respectée = Non.
+2. Coche les **erreurs** commises, ou « Aucune erreur aujourd'hui ».
+3. Dis si tu as tenu l'objectif du jour.
+4. Donne-toi ta **note de discipline de 1 à 10**. Sous la note, l'app te montre ce que
+   disent les chiffres (perte max, nombre de trades, stop dépassé, reprise en moins de
+   5 minutes après une perte avec la même taille, trades hors de tes heures). Si tu te mets
+   8 ou plus alors qu'un de ces points est rouge, elle te le signale : une note honnête
+   vaut plus qu'une belle note.
+5. Écris **la leçon du jour** : une seule chose que tu changes demain.
+
+L'écran **Discipline** compare ensuite les jours notés 8 à 10 (élevée), 5 à 7 (moyenne) et
+1 à 4 (basse) : profit moyen par jour, journées vertes, trades par jour, perte moyenne, pire
+journée. Il chiffre aussi ce que te coûte chaque erreur, ce que te rapporte chaque règle,
+l'effet de ton sommeil et de ton calme, et ta « fuite de discipline » : la courbe de capital
+avec et sans tes jours indisciplinés. En bas, les journées tradées que tu n'as pas encore
+notées : un clic pour les noter.
+
+Les listes de règles et d'erreurs se modifient dans **Réglages**, carte Discipline. Tes heures
+de trading (par exemple `08:30-11:00, 13:30-16:00`) se règlent dans la carte Compte et risque.
+
+**Qualité du setup** : dans le détail d'un trade, note A+, A, B ou C selon ce que tu voyais
+*avant* d'entrer. Statistiques et Discipline te montrent alors ce qu'aurait donné ton compte
+avec tes seuls A+ et A.
+
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 57 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 107 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash
