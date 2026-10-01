@@ -367,6 +367,13 @@ svg text{font-family:inherit}
 .critere .choix button.on[data-v="0"]{background:var(--rouge);border-color:var(--rouge);color:#fff}
 .critere.oui{border-color:rgba(38,166,154,.45)}
 .critere.non{border-color:rgba(239,83,80,.5)}
+.setup-ligne{
+  display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:10px;align-items:center;
+  padding:7px 9px;border:1px solid var(--bord);border-radius:8px;margin-bottom:6px;background:var(--fond);
+}
+.setup-ligne .t{font-size:13px;cursor:pointer;font-variant-numeric:tabular-nums}
+.setup-ligne .t:hover{color:#fff}
+@media(max-width:560px){.setup-ligne{grid-template-columns:minmax(0,1fr);gap:6px}}
 .etq-choix.erreur.on{background:var(--rouge-fond);border-color:var(--rouge);color:var(--rouge-clair)}
 .faits{display:flex;flex-direction:column;gap:5px;font-size:12px}
 .faits div{display:flex;gap:7px;align-items:flex-start}
@@ -1657,9 +1664,9 @@ function tradesApresPerteMax(trades, perteMax){
   return (trades || []).filter(function(t){ return t.ouverture >= touche; });
 }
 
-/* Qualite du setup notee sur chaque trade : A+, A, B, C.
+/* Qualite du setup notee sur chaque trade : A+, A, B, C, D (du meilleur au pire).
    Le "et si" montre ce qu'aurait donne le compte avec les seuls A+ et A. */
-var QUALITES = ['A+', 'A', 'B', 'C'];
+var QUALITES = ['A+', 'A', 'B', 'C', 'D'];
 function analyseQualite(trades){
   var notes = (trades || []).filter(function(t){ return QUALITES.indexOf(t.qualite) >= 0; });
   var groupes = QUALITES.map(function(q){
@@ -2934,12 +2941,8 @@ async function ouvrirTrade(cle){
       '</div>' +
 
       '<h4 style="margin-top:14px">Qualité du setup <span class="gris" style="text-transform:none;letter-spacing:0">telle que tu la voyais avant d\'entrer</span></h4>' +
-      '<div class="echelle5" id="tdQualite" style="grid-template-columns:repeat(4,minmax(0,1fr));max-width:280px">' +
-        QUALITES.map(function(q){
-          return '<button data-q="' + q + '" class="' + classeQualite(q) + (t.qualite === q ? ' on' : '') + '">' + q + '</button>';
-        }).join('') +
-      '</div>' +
-      '<div class="gris mini" style="margin-top:4px">A+ = tout y est, A = presque, B = il manque quelque chose, C = je n\'aurais pas dû.</div>' +
+      '<div class="echelle5" id="tdQualite" style="max-width:320px">' + boutonsQualite(t.qualite) + '</div>' +
+      '<div class="gris mini" style="margin-top:4px">' + LEGENDE_QUALITE + '</div>' +
     '</div>' +
 
     '<div>' +
@@ -3434,7 +3437,7 @@ function rendreStats(){
   var ordreQ = QUALITES.concat(['(pas notée)']);
   parQualite.sort(function(a, b){ return ordreQ.indexOf(a.cle) - ordreQ.indexOf(b.cle); });
   $('#statsQualite').innerHTML = tableauGroupes(parQualite, 'Qualité du setup') +
-    '<div class="petit gris" style="margin-top:8px">Si tes B et tes C perdent de l\'argent, la solution n\'est pas une autre stratégie : ' +
+    '<div class="petit gris" style="margin-top:8px">Si tes B, C et D perdent de l\'argent, la solution n\'est pas une autre stratégie : ' +
     'c\'est de ne plus les prendre. L\'écran Discipline chiffre ce que tu aurais gagné avec tes seuls A+ et A.</div>';
 
   // repartition
@@ -3736,7 +3739,16 @@ function classeNiveau(n){
   var nv = niveauDiscipline(n);
   return nv ? ({ haute: 'h', moyenne: 'm', basse: 'b' })[nv.cle] : '';
 }
-function classeQualite(q){ return q === 'C' ? 'b' : (q === 'B' ? 'm' : 'h'); }
+// A+ et A en vert, B en jaune, C et D en rouge
+function classeQualite(q){ return (q === 'C' || q === 'D') ? 'b' : (q === 'B' ? 'm' : 'h'); }
+var LEGENDE_QUALITE = 'D = pas de vrai setup, je n\'aurais pas dû entrer. C = setup faible. ' +
+  'B = il manque quelque chose. A = presque tout y est. A+ = tout y est.';
+// les boutons vont de D a A+, de gauche a droite, comme la note de discipline de 1 a 10
+function boutonsQualite(choisie){
+  return QUALITES.slice().reverse().map(function(q){
+    return '<button data-q="' + q + '" class="' + classeQualite(q) + (choisie === q ? ' on' : '') + '">' + q + '</button>';
+  }).join('');
+}
 function pastilleDiscipline(n, titre){
   if (!(n >= 1)) return '';
   return '<span class="pastille-d ' + classeNiveau(n) + '"' + (titre ? ' title="' + ech(titre) + '"' : '') + '>' + n + '</span>';
@@ -3811,6 +3823,18 @@ function rendreCarteDiscipline(cle, jourStats){
     '<div class="echelle10" id="discEchelle">' + echelle + '</div>' +
     '<div class="echelle10-legende"><span>1 = j\'ai fait n\'importe quoi</span><span>10 = mon plan, rien que mon plan</span></div>' +
     '<div id="discMiroir" style="margin-top:10px"></div>' +
+    (jourStats ?
+      '<h4 style="margin-top:14px">Le setup de mes trades <span class="gris" id="discCompteSetups" style="text-transform:none;letter-spacing:0"></span></h4>' +
+      '<div id="discSetups">' + jourStats.trades.slice().sort(function(a, b){ return a.ouverture - b.ouverture; }).map(function(t){
+        return '<div class="setup-ligne" data-tq="' + ech(t.cle) + '">' +
+          '<div class="t" data-ouvrir title="ouvrir le détail du trade">' +
+            '<span class="gris">' + fmtHeureCourte(t.ouverture) + '</span> &middot; ' + ech(t.symbole) + ' ' +
+            (t.sens === 'long' ? 'Long' : 'Short') + ' ' + fmtNombre(t.qte, 0) +
+            ' &middot; <b class="' + cls(t.net) + '">' + signe(t.net, 0) + '</b></div>' +
+          '<div class="echelle5">' + boutonsQualite(t.qualite) + '</div></div>';
+      }).join('') + '</div>' +
+      '<div class="gris mini">' + LEGENDE_QUALITE + ' Note-le comme tu le voyais avant d\'entrer, pas d\'après le résultat.</div>'
+    : '') +
     '<div class="grille g2" style="margin-top:12px">' +
       '<div>' +
         '<h4>Avant la séance : mon état</h4>' + etats +
@@ -3915,6 +3939,29 @@ function rendreCarteDiscipline(cle, jourStats){
     sauverJournalBientot();
   };
   $('#discLecon').oninput = function(){ discJour.lecon = this.value; sauverJournalBientot(800); };
+
+  // la note du setup va directement sur le trade : ce n'est pas un champ de la journee,
+  // c'est le meme champ que dans le detail du trade, il s'enregistre donc tout de suite
+  function majCompteSetups(){
+    if (!jourStats) return;
+    var nb = jourStats.trades.filter(function(t){ return t.qualite; }).length;
+    $('#discCompteSetups').textContent = '(' + nb + ' noté' + (nb > 1 ? 's' : '') + ' sur ' + jourStats.trades.length + ')';
+  }
+  majCompteSetups();
+  $$('#discSetups [data-tq]').forEach(function(ligne){
+    var t = tradeParCle(ligne.dataset.tq);
+    if (!t) return;
+    $('[data-ouvrir]', ligne).onclick = function(){ ouvrirTrade(t.cle); };
+    $$('button[data-q]', ligne).forEach(function(b){
+      b.onclick = async function(){
+        t.qualite = t.qualite === b.dataset.q ? null : b.dataset.q;   // retaper la meme note l'efface
+        $$('button[data-q]', ligne).forEach(function(x){ x.classList.toggle('on', x.dataset.q === t.qualite); });
+        majCompteSetups();
+        await dbMettre('trades', nettoyerPourDb(t));
+        $('#discEtat').textContent = 'enregistré à ' + fmtHeureCourte(Date.now());
+      };
+    });
+  });
 
   var obj = $('#discObjectif');
   if (obj) {
@@ -4228,13 +4275,13 @@ function rendreDiscipline(){
     });
     html += '<div class="carte"><h3>Et si tu n\'avais pris que tes A+ et tes A ?</h3>' +
       '<div class="verdict" style="margin-bottom:10px">Sur tes <b>' + aq.nbNotes + '</b> trades notés, résultat : <b class="' + cls(aq.netNotes) + '">' +
-      signe(aq.netNotes, 0) + '</b>. Avec seulement les A+ et A (' + aq.nbBons + ' trades) : <b class="' + cls(aq.netBons) + '">' + signe(aq.netBons, 0) + '</b>' +
+      signe(aq.netNotes, 0) + '</b>. Avec seulement les A+ et A (' + aq.nbBons + ' trade' + (aq.nbBons > 1 ? 's' : '') + ') : <b class="' + cls(aq.netBons) + '">' + signe(aq.netBons, 0) + '</b>' +
       (aq.nbBons ? ', avec un recul maximal de ' + fmtArgent(-aq.ddBons, 0) + ' au lieu de ' + fmtArgent(-aq.ddNotes, 0) : '') + '.</div>' +
       tableauGroupes(gq, 'Qualité') +
-      '<div class="petit gris" style="margin-top:8px">La qualité se note dans le détail de chaque trade. Note-la comme tu la voyais AVANT d\'entrer, pas après le résultat.</div></div>';
+      '<div class="petit gris" style="margin-top:8px">La qualité se note dans le Journal quotidien, carte Discipline du jour, ou dans le détail du trade. Note-la comme tu la voyais AVANT d\'entrer, pas après le résultat.</div></div>';
   } else if (an.nbNotees) {
-    html += '<div class="carte"><h3>Et si tu n\'avais pris que tes A+ et tes A ?</h3><div class="petit gris">Aucun trade noté A+, A, B ou C sur la plage. ' +
-      'Ouvre un trade dans l\'onglet Trades et choisis sa <b>qualité du setup</b> : l\'app calculera ce que tes B et tes C te coûtent.</div></div>';
+    html += '<div class="carte"><h3>Et si tu n\'avais pris que tes A+ et tes A ?</h3><div class="petit gris">Aucun trade noté de D à A+ sur la plage. ' +
+      'Dans le Journal quotidien, carte Discipline du jour, note le <b>setup de chaque trade</b> : l\'app calculera ce que tes B, C et D te coûtent.</div></div>';
   }
 
   // ---- la note contre les chiffres ----
@@ -5395,7 +5442,7 @@ function lancerAutotest(){
     '-2,75 point x 3 x 5 $ = -41,25 $ moins 4,50 $ de commissions sur MES, et 48,75 points x 4 x 2 $ = 390 $ moins 6 $ sur MNQ. ' +
     'Les fills qui manquent doivent donc peser -440,00 $. Importe le CSV complet : si le total affiche par le journal ' +
     'n\'est pas -101,75 $, c\'est le fichier ou un multiplicateur qu\'il faut regarder, le calcul lui-même est vérifié ' +
-    'par 107 tests dans <b>verifier-moteur.cjs</b> (commande : node verifier-moteur.cjs).</div>';
+    'par 110 tests dans <b>verifier-moteur.cjs</b> (commande : node verifier-moteur.cjs).</div>';
   $('#sortieAutotest').innerHTML = html;
 }
 

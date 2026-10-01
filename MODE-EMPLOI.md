@@ -257,13 +257,14 @@ notées : un clic pour les noter.
 Les listes de règles et d'erreurs se modifient dans **Réglages**, carte Discipline. Tes heures
 de trading (par exemple `08:30-11:00, 13:30-16:00`) se règlent dans la carte Compte et risque.
 
-**Qualité du setup** : dans le détail d'un trade, note A+, A, B ou C selon ce que tu voyais
+**Qualité du setup** : dans la carte Discipline du jour, chaque trade de la journée a ses
+boutons D, C, B, A, A+ (ils sont aussi dans le détail du trade). Note selon ce que tu voyais
 *avant* d'entrer. Statistiques et Discipline te montrent alors ce qu'aurait donné ton compte
 avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 107 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 110 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash

@@ -308,6 +308,10 @@ verifier('5 trades notes (le 6e ne l\'est pas)', aq.nbNotes, 5);
 verifier('tous les trades notes : +100', aq.netNotes, 100);
 verifier('seulement A+ et A : +400', aq.netBons, 400);
 verifier('les C : 2 trades', aq.groupes[3].nb, 2);
+const aqD = M.analyseQualite([tq('A+', 300), tq('D', -400), tq('D', -100)]);
+verifier('la note D est comptee', aqD.nbNotes, 3);
+verifier('les D : 2 trades, -500', aqD.groupes[4].net, -500);
+verifier('sans les D, seulement A+ et A : +300', aqD.netBons, 300);
 const anObj = M.analyseDiscipline([
   { date: '2026-09-01', objectifTenu: true }, { date: '2026-09-02', objectifTenu: true },
   { date: '2026-09-03', objectifTenu: false }
