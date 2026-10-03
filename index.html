@@ -301,7 +301,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .editeur:empty:before{content:attr(data-vide);color:var(--texte3)}
 
 .lignes-onglets{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
-.lignes-onglets button.actif{background:var(--fond4);color:#fff;border-color:var(--bord2)}
+.lignes-onglets button.actif{background:var(--accent-fond);color:#fff;border-color:var(--accent)}
 
 .liste-pieces{display:flex;flex-direction:column;gap:6px}
 .piece{
@@ -573,19 +573,33 @@ svg text{font-family:inherit}
 
   <!-- ============ STATISTIQUES ============ -->
   <section class="ecran" id="ec-stats">
-    <h1>Statistiques</h1>
-    <div class="carte">
-      <h3>Par étiquette <span class="petit gris">trié par profit total</span></h3>
-      <div id="statsEtiquettes"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <h1 style="margin:0">Statistiques</h1>
+      <div class="lignes-onglets" id="statsOnglets" style="margin:0 0 0 auto">
+        <button class="pt" data-onglet="journees">Tes journées</button>
+        <button class="pt" data-onglet="categories">Par catégorie</button>
+      </div>
     </div>
-    <div class="grille g2">
-      <div class="carte"><h3>Par heure d'entrée</h3><div id="statsHeures"></div></div>
-      <div class="carte"><h3>Par jour de la semaine</h3><div id="statsJours"></div></div>
+    <div id="statsJournees"></div>
+    <div id="statsCategories">
+      <div class="carte">
+        <h3>Par étiquette <span class="petit gris">trié par profit total</span></h3>
+        <div id="statsEtiquettes"></div>
+      </div>
+      <div class="grille g2">
+        <div class="carte"><h3>Par heure d'entrée</h3><div id="statsHeures"></div></div>
+        <div class="carte"><h3>Par jour de la semaine</h3><div id="statsJours"></div></div>
+      </div>
+      <div class="carte"><h3>Long contre short</h3><div id="statsSens"></div></div>
+      <div class="grille g2">
+        <div class="carte"><h3>Par durée du trade</h3><div id="statsDurees"></div></div>
+        <div class="carte"><h3>Par taille de position</h3><div id="statsTailles"></div></div>
+      </div>
+      <div class="carte"><h3>Par symbole</h3><div id="statsSymboles"></div></div>
+      <div class="carte"><h3>Par note d'exécution</h3><div id="statsNotes"></div></div>
+      <div class="carte"><h3>Par qualité du setup</h3><div id="statsQualite"></div></div>
+      <div class="carte"><h3>Répartition des profits</h3><div id="statsHisto"></div></div>
     </div>
-    <div class="carte"><h3>Par symbole</h3><div id="statsSymboles"></div></div>
-    <div class="carte"><h3>Par note d'exécution</h3><div id="statsNotes"></div></div>
-    <div class="carte"><h3>Par qualité du setup</h3><div id="statsQualite"></div></div>
-    <div class="carte"><h3>Répartition des profits</h3><div id="statsHisto"></div></div>
   </section>
 
   <!-- ============ PLAYBOOKS ============ -->
@@ -1853,6 +1867,250 @@ function analyseDiscipline(jours, parJour, o){
   return res;
 }
 
+/* ---------- LE DEROULEMENT DES JOURNEES ----------
+   Ce que calcule l'onglet Statistiques > Tes journees :
+     - le premier trade de la journee (gagnant, BE ou perdant) et ce qui suit ;
+     - les regles d'arret rejouees sur l'historique (1 trade max, arret a la
+       premiere perte, au premier gain...) et le meilleur plafond de trades ;
+     - le rang du trade dans la journee (1er, 2e, 3e...) ;
+     - le trade qui suit un gain, un BE, une perte, deux pertes de suite ;
+     - le nombre de trades par jour ;
+     - le sommet atteint pendant la seance contre la cloture.
+   La journee d'un trade est celle de sa FERMETURE, comme au calendrier.
+   Dans une journee, les trades sont pris dans l'ordre d'OUVERTURE.
+   Un trade est BE (break-even) quand son profit net est entre -seuilBE et +seuilBE :
+   un stop remonte a l'entree finit rarement a 0,00 $ pile. */
+var SEUIL_BE_DEFAUT = 10;
+
+function resultatDe(net, seuil){
+  var s = Math.abs(Number(seuil) || 0);
+  var n = Number(net) || 0;
+  if (n > s) return 'g';
+  if (n < -s) return 'p';
+  return 'be';
+}
+
+function journeesOrdonnees(trades){
+  var m = {};
+  (trades || []).forEach(function(t){
+    var c = cleJour(t.fermeture);
+    (m[c] = m[c] || []).push(t);
+  });
+  return Object.keys(m).sort().map(function(c){
+    var l = m[c].slice().sort(function(a, b){
+      return (a.ouverture - b.ouverture) || (a.fermeture - b.fermeture) || String(a.cle).localeCompare(String(b.cle));
+    });
+    var net = l.reduce(function(a, t){ return a + (Number(t.net) || 0); }, 0);
+    return { cle: c, trades: l, net: net, nb: l.length };
+  });
+}
+
+// Les regles d'arret testees. Chacune dit, apres chaque trade, s'il fallait s'arreter.
+var REGLES_ARRET = [
+  { cle: 'reel',     nom: 'Ce que tu as fait' },
+  { cle: 'max1',     nom: 'Un seul trade par jour', max: 1 },
+  { cle: 'max2',     nom: '2 trades maximum par jour', max: 2 },
+  { cle: 'max3',     nom: '3 trades maximum par jour', max: 3 },
+  { cle: 'gain1',    nom: 'Arrêt au premier trade gagnant' },
+  { cle: 'vert',     nom: 'Arrêt dès que la journée passe au vert' },
+  { cle: 'perte1',   nom: 'Arrêt à la première perte' },
+  { cle: 'perte2',   nom: 'Arrêt à la deuxième perte' },
+  { cle: 'perteMax', nom: 'Arrêt à ta perte max du jour (Réglages)' }
+];
+
+// Les trades de la journee qu'on aurait gardes avec la regle : tous ceux pris
+// avant que la regle dise stop, le trade qui la declenche compris.
+function tradesAvecRegle(jour, regle, o){
+  o = o || {};
+  var seuil = Math.abs(Number(o.seuilBE) || 0);
+  var gardes = [], cumul = 0, nbP = 0;
+  for (var i = 0; i < jour.trades.length; i++) {
+    var t = jour.trades[i];
+    gardes.push(t);
+    cumul += Number(t.net) || 0;
+    var r = resultatDe(t.net, seuil);
+    if (r === 'p') nbP++;
+    var stop = false;
+    if (regle.max) stop = gardes.length >= regle.max;
+    else if (regle.cle === 'gain1') stop = r === 'g';
+    else if (regle.cle === 'vert') stop = cumul > seuil;
+    else if (regle.cle === 'perte1') stop = nbP >= 1;
+    else if (regle.cle === 'perte2') stop = nbP >= 2;
+    else if (regle.cle === 'perteMax') stop = o.perteJourMax > 0 && cumul <= -Math.abs(o.perteJourMax);
+    if (stop) break;
+  }
+  return gardes;
+}
+
+function bilanRegle(jours, regle, o){
+  var gardes = [], nets = [];
+  jours.forEach(function(j){
+    var l = tradesAvecRegle(j, regle, o);
+    gardes = gardes.concat(l);
+    nets.push(l.reduce(function(a, t){ return a + (Number(t.net) || 0); }, 0));
+  });
+  var st = statsDeTrades(gardes);
+  return {
+    cle: regle.cle, nom: regle.nom, total: st.net, nbTrades: st.nb, nbJours: jours.length,
+    joursVerts: nets.filter(function(n){ return n > 0; }).length,
+    pireJour: nets.length ? Math.min.apply(null, nets) : null,
+    ddMax: st.ddMax, tauxReussite: st.tauxReussite
+  };
+}
+
+// Durees et tailles regroupees en tranches lisibles, pour l'onglet Par categorie.
+var TRANCHES_DUREE = ['Moins de 1 min', '1 à 5 min', '5 à 15 min', '15 à 60 min', '1 h et plus'];
+function trancheDuree(sec){
+  var s = Number(sec) || 0;
+  if (s < 60) return TRANCHES_DUREE[0];
+  if (s < 300) return TRANCHES_DUREE[1];
+  if (s < 900) return TRANCHES_DUREE[2];
+  if (s < 3600) return TRANCHES_DUREE[3];
+  return TRANCHES_DUREE[4];
+}
+var TRANCHES_TAILLE = ['1 contrat', '2 contrats', '3 contrats', '4 à 5 contrats', '6 à 10 contrats', '11 contrats et plus'];
+function trancheTaille(q){
+  var n = Math.abs(Number(q) || 0);
+  if (n <= 1) return TRANCHES_TAILLE[0];
+  if (n <= 2) return TRANCHES_TAILLE[1];
+  if (n <= 3) return TRANCHES_TAILLE[2];
+  if (n <= 5) return TRANCHES_TAILLE[3];
+  if (n <= 10) return TRANCHES_TAILLE[4];
+  return TRANCHES_TAILLE[5];
+}
+
+/* trades : ceux de la plage.  o : { seuilBE, perteJourMax } */
+function analyseJournees(trades, o){
+  o = o || {};
+  var seuil = Math.abs(o.seuilBE === undefined || o.seuilBE === null ? SEUIL_BE_DEFAUT : Number(o.seuilBE) || 0);
+  var oo = { seuilBE: seuil, perteJourMax: o.perteJourMax };
+  var jours = journeesOrdonnees(trades);
+  var nets = jours.map(function(j){ return j.net; });
+  var res = { seuilBE: seuil, nbJours: jours.length, nbTrades: (trades || []).length };
+  if (!jours.length) return res;
+
+  // 1. la journee type
+  var verts = nets.filter(function(n){ return n > 0; }), rouges = nets.filter(function(n){ return n < 0; });
+  res.moyenneJour = moyenneDe(nets);
+  res.joursVerts = verts.length;
+  res.joursRouges = rouges.length;
+  res.moyenneJourVert = moyenneDe(verts);
+  res.moyenneJourRouge = moyenneDe(rouges);
+  res.tradesParJour = res.nbTrades / jours.length;
+  var sV = 0, sR = 0;
+  res.serieVerteMax = 0; res.serieRougeMax = 0;
+  nets.forEach(function(n){
+    if (n > 0) { sV++; sR = 0; } else if (n < 0) { sR++; sV = 0; } else { sV = 0; sR = 0; }
+    res.serieVerteMax = Math.max(res.serieVerteMax, sV);
+    res.serieRougeMax = Math.max(res.serieRougeMax, sR);
+  });
+  res.serieActuelle = sV ? { sens: 'verte', nb: sV } : (sR ? { sens: 'rouge', nb: sR } : null);
+
+  // 2. le premier trade de la journee, et ce qui suit
+  var P = {};
+  ['g', 'be', 'p'].forEach(function(k){ P[k] = { cle: k, jours: [] }; });
+  jours.forEach(function(j){
+    var t1 = j.trades[0];
+    var n1 = Number(t1.net) || 0;
+    P[resultatDe(n1, seuil)].jours.push({ cle: j.cle, premier: n1, net: j.net, suite: j.net - n1, nbSuite: j.nb - 1 });
+  });
+  res.premier = {};
+  Object.keys(P).forEach(function(k){
+    var l = P[k].jours, cont = l.filter(function(x){ return x.nbSuite > 0; });
+    res.premier[k] = {
+      cle: k, nbJours: l.length,
+      moyennePremier: moyenneDe(l.map(function(x){ return x.premier; })),
+      moyenneJour: moyenneDe(l.map(function(x){ return x.net; })),
+      nbArret: l.length - cont.length,
+      tauxArret: l.length ? (l.length - cont.length) / l.length : null,
+      nbContinue: cont.length,
+      moyenneSuite: moyenneDe(cont.map(function(x){ return x.suite; })),
+      totalSuite: cont.reduce(function(a, x){ return a + x.suite; }, 0),
+      suitesPositives: cont.filter(function(x){ return x.suite > 0; }).length,
+      tradesApres: moyenneDe(cont.map(function(x){ return x.nbSuite; })),
+      joursVerts: l.filter(function(x){ return x.net > 0; }).length
+    };
+  });
+
+  // 3. les regles d'arret, et le meilleur plafond de trades par jour
+  res.regles = REGLES_ARRET.filter(function(r){ return r.cle !== 'perteMax' || o.perteJourMax > 0; })
+    .map(function(r){ return bilanRegle(jours, r, oo); });
+  var reel = res.regles[0].total;
+  res.regles.forEach(function(r){ r.ecart = r.total - reel; });
+  var maxNb = Math.min(10, Math.max.apply(null, jours.map(function(j){ return j.nb; })));
+  res.plafonds = [];
+  for (var n = 1; n <= maxNb; n++) {
+    var b = bilanRegle(jours, { cle: 'max' + n, max: n }, oo);
+    res.plafonds.push({ max: n, total: b.total, nbTrades: b.nbTrades, ecart: b.total - reel });
+  }
+  res.meilleurPlafond = res.plafonds.reduce(function(m, p){ return !m || p.total > m.total ? p : m; }, null);
+
+  // 4. le rang du trade dans la journee : 1er, 2e, 3e, 4e, 5e et suivants
+  var RANGS = ['1er trade', '2e trade', '3e trade', '4e trade', '5e trade et suivants'];
+  var parRang = RANGS.map(function(){ return []; });
+  jours.forEach(function(j){ j.trades.forEach(function(t, i){ parRang[Math.min(i, 4)].push(t); }); });
+  res.rangs = RANGS.map(function(nom, i){
+    var st = statsDeTrades(parRang[i]);
+    return { cle: nom, nb: st.nb, net: st.net, moyenne: st.moyenne, taux: st.tauxReussite,
+             moyenneR: st.moyenneR, facteur: st.facteurProfit };
+  }).filter(function(x){ return x.nb; });
+
+  // 5. le trade qui suit un gain, un BE, une perte, deux pertes de suite.
+  // Seulement dans la meme journee, et seulement si le trade suivant a ete ouvert
+  // APRES la fermeture du precedent (on connaissait donc le resultat).
+  var A = { g: [], be: [], p: [], p2: [] }, D = { g: [], be: [], p: [], p2: [] };
+  jours.forEach(function(j){
+    for (var i = 1; i < j.trades.length; i++) {
+      var prec = j.trades[i - 1], t = j.trades[i];
+      if (t.ouverture < prec.fermeture) continue;
+      var r = resultatDe(prec.net, seuil);
+      var delai = (t.ouverture - prec.fermeture) / 60000;
+      A[r].push(t); D[r].push(delai);
+      if (r === 'p' && i >= 2 && resultatDe(j.trades[i - 2].net, seuil) === 'p' && prec.ouverture >= j.trades[i - 2].fermeture) {
+        A.p2.push(t); D.p2.push(delai);
+      }
+    }
+  });
+  res.apres = ['g', 'be', 'p', 'p2'].map(function(k){
+    var st = statsDeTrades(A[k]);
+    return { cle: k, nb: st.nb, net: st.net, moyenne: st.moyenne, taux: st.tauxReussite,
+             delaiMoyen: moyenneDe(D[k]) };
+  });
+
+  // 6. le nombre de trades dans la journee
+  var PAQUETS = [{ nom: '1 trade', min: 1, max: 1 }, { nom: '2 trades', min: 2, max: 2 }, { nom: '3 trades', min: 3, max: 3 },
+                 { nom: '4 ou 5 trades', min: 4, max: 5 }, { nom: '6 trades et plus', min: 6, max: Infinity }];
+  res.parNombre = PAQUETS.map(function(p){
+    var ns = jours.filter(function(j){ return j.nb >= p.min && j.nb <= p.max; }).map(function(j){ return j.net; });
+    return { nom: p.nom, nbJours: ns.length, total: ns.reduce(function(a, b){ return a + b; }, 0),
+             moyenneJour: moyenneDe(ns), joursVerts: ns.filter(function(x){ return x > 0; }).length };
+  }).filter(function(p){ return p.nbJours; });
+
+  // 7. le sommet de la journee contre la cloture. Le profit de la journee avance
+  // a chaque fermeture de trade ; le sommet est le plus haut atteint.
+  var passes = [];
+  res.vertesFiniesRouges = []; res.rougesFiniesVertes = [];
+  jours.forEach(function(j){
+    var l = j.trades.slice().sort(function(a, b){ return a.fermeture - b.fermeture; });
+    var cumul = 0, haut = 0, bas = 0;
+    l.forEach(function(t){ cumul += Number(t.net) || 0; haut = Math.max(haut, cumul); bas = Math.min(bas, cumul); });
+    if (haut > seuil) passes.push({ cle: j.cle, haut: haut, net: j.net, rendu: haut - j.net });
+    if (haut > seuil && j.net < 0) res.vertesFiniesRouges.push({ cle: j.cle, haut: haut, net: j.net });
+    if (bas < -seuil && j.net > 0) res.rougesFiniesVertes.push({ cle: j.cle, bas: bas, net: j.net });
+  });
+  var sommeHaut = passes.reduce(function(a, x){ return a + x.haut; }, 0);
+  var sommeRendu = passes.reduce(function(a, x){ return a + x.rendu; }, 0);
+  res.sommet = {
+    nbJours: passes.length,
+    moyenneHaut: moyenneDe(passes.map(function(x){ return x.haut; })),
+    moyenneCloture: moyenneDe(passes.map(function(x){ return x.net; })),
+    moyenneRendu: moyenneDe(passes.map(function(x){ return x.rendu; })),
+    totalRendu: sommeRendu,
+    partRendue: sommeHaut > 0 ? sommeRendu / sommeHaut : null
+  };
+  return res;
+}
+
 /* ==================== FIN MOTEUR ==================== */
 /* =======================================================================
    BASE DE DONNEES (IndexedDB)
@@ -1963,6 +2221,7 @@ var REGLAGES_DEFAUT = {
   criteresDiscipline: JSON.parse(JSON.stringify(CRITERES_DEFAUT)),
   erreursDiscipline: ERREURS_DEFAUT.slice(),
   heuresPermises: '',
+  seuilBE: SEUIL_BE_DEFAUT,
   dossiers: ['Revues de semaine', 'Preparation', 'Idees'],
   inclureSimules: false
 };
@@ -1977,6 +2236,7 @@ var E = {
   tri: { col: 'fermeture', sens: -1 },
   journalDate: cleJour(Date.now()),
   carnetDossier: '',
+  ongletStats: 'journees',
   urls: [],
   pointsCourbe: [], pointsJours: []
 };
@@ -3397,8 +3657,13 @@ function tableauGroupes(groupes, nomColonne){
 
 function rendreStats(){
   var trades = tradesActifs();
+  $$('#statsOnglets button').forEach(function(b){ b.classList.toggle('actif', b.dataset.onglet === E.ongletStats); });
+  $('#statsJournees').hidden = E.ongletStats !== 'journees';
+  $('#statsCategories').hidden = E.ongletStats === 'journees';
+  if (E.ongletStats === 'journees') { rendreStatsJournees(trades); return; }
   if (!trades.length) {
-    ['statsEtiquettes', 'statsHeures', 'statsJours', 'statsSymboles', 'statsNotes', 'statsQualite', 'statsHisto'].forEach(function(id){
+    ['statsEtiquettes', 'statsHeures', 'statsJours', 'statsSens', 'statsDurees', 'statsTailles',
+     'statsSymboles', 'statsNotes', 'statsQualite', 'statsHisto'].forEach(function(id){
       $('#' + id).innerHTML = '<div class="vide">Aucun trade sur la plage choisie.</div>';
     });
     return;
@@ -3423,6 +3688,25 @@ function rendreStats(){
     return { etq: g.cle, val: g.net, extra: g.nb + ' tr.' };
   }));
 
+  // long contre short
+  $('#statsSens').innerHTML = tableauGroupes(grouper(trades, function(t){ return t.sens === 'short' ? 'Short' : 'Long'; }), 'Sens');
+
+  // par duree et par taille, dans l'ordre des tranches
+  var bulleGroupe = function(g){
+    return g.nb + ' trade' + (g.nb > 1 ? 's' : '') + ', ' + (g.taux === null ? '' : fmtNombre(g.taux * 100, 0) + ' % de réussite, ') +
+      (g.moyenne === null ? '' : signe(g.moyenne, 0) + ' en moyenne');
+  };
+  var parDuree = grouper(trades, function(t){ return trancheDuree(t.duree); });
+  parDuree.sort(function(a, b){ return TRANCHES_DUREE.indexOf(a.cle) - TRANCHES_DUREE.indexOf(b.cle); });
+  $('#statsDurees').innerHTML = barres(parDuree.map(function(g){
+    return { etq: g.cle, val: g.net, extra: g.nb + ' tr.', bulle: bulleGroupe(g) };
+  })) + '<div class="petit gris" style="margin-top:6px">Temps entre l\'entrée et la sortie complète. Passe la souris sur une barre pour le détail.</div>';
+  var parTaille = grouper(trades, function(t){ return trancheTaille(t.qte); });
+  parTaille.sort(function(a, b){ return TRANCHES_TAILLE.indexOf(a.cle) - TRANCHES_TAILLE.indexOf(b.cle); });
+  $('#statsTailles').innerHTML = barres(parTaille.map(function(g){
+    return { etq: g.cle, val: g.net, extra: g.nb + ' tr.', bulle: bulleGroupe(g) };
+  })) + '<div class="petit gris" style="margin-top:6px">Le plus grand nombre de contrats tenus pendant le trade. Si tes grosses tailles perdent, c\'est souvent l\'émotion qui a choisi la taille.</div>';
+
   // par symbole
   $('#statsSymboles').innerHTML = tableauGroupes(grouper(trades, function(t){ return t.symbole; }), 'Symbole');
 
@@ -3443,6 +3727,251 @@ function rendreStats(){
   // repartition
   $('#statsHisto').innerHTML = svgHistogramme(trades.map(function(t){ return t.net; }), 14) +
     '<div class="petit gris">Chaque barre est un intervalle de profit net, la hauteur est le nombre de trades.</div>';
+}
+
+/* ---------- onglet Tes journees ----------
+   Tout le calcul est dans analyseJournees (moteur, teste par verifier-moteur.cjs).
+   Ici on ne fait que l'afficher et l'expliquer en phrases. */
+function rendreStatsJournees(trades){
+  var rg = E.reglages;
+  var seuil = (rg.seuilBE === undefined || rg.seuilBE === null) ? SEUIL_BE_DEFAUT : rg.seuilBE;
+  var a = analyseJournees(trades, { seuilBE: seuil, perteJourMax: rg.perteJourMax });
+  var moy = function(v){ return v === null || v === undefined ? '--' : signe(v, 0); };
+  var pct = function(n, d){ return d ? fmtNombre(n / d * 100, 0) + ' %' : '--'; };
+  var pl = function(n, mot){ return n + ' ' + mot + (n > 1 ? 's' : ''); };
+  var ligne = function(k, v, c){ return '<tr><td class="gris">' + k + '</td><td class="num ' + (c || '') + '">' + v + '</td></tr>'; };
+  var enListe = function(l){ return l.length > 1 ? l.slice(0, -1).join(', ') + ' et ' + l[l.length - 1] : (l[0] || ''); };
+  var html = '';
+
+  html += '<div class="avis bleuf">Comment se déroulent tes journées : ce que tu fais après ton premier trade, à quel moment ' +
+    't\'arrêter, ce que valent tes 2e, 3e et 4e trades, et ce que tu fais après une perte. Une journée regroupe les trades fermés ' +
+    'ce jour-là, dans l\'ordre où tu les as ouverts. La plage de dates en haut s\'applique ici aussi.' +
+    '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Un trade compte comme <b>BE</b> ' +
+    '(break-even) s\'il finit entre <span class="nowrap">-<input type="number" id="stSeuilBE" min="0" step="1" value="' + seuil +
+    '" style="width:70px;display:inline-block;padding:3px 6px"> $</span> et <span class="nowrap">+' + fmtNombre(seuil, 0) + ' $</span>. ' +
+    '<span class="gris">Au-dessus il est gagnant, en dessous il est perdant.</span></div></div>';
+
+  if (!a.nbJours) {
+    $('#statsJournees').innerHTML = html + '<div class="vide">Aucun trade sur la plage choisie.</div>';
+    brancherStatsJournees();
+    return;
+  }
+  if (a.nbJours < 20) {
+    html += '<div class="avis jaunef">Seulement ' + pl(a.nbJours, 'journée') + ' sur la plage : une seule grosse journée peut ' +
+      'encore faire basculer une moyenne. Lis ces chiffres comme des pistes, ils deviennent solides vers 20 journées.</div>';
+  }
+
+  // ---- la journee type ----
+  var mp = a.meilleurPlafond;
+  html += '<div class="grille g4" style="margin-bottom:14px">' +
+    chiffre('Journée moyenne', moy(a.moyenneJour), 'sur ' + pl(a.nbJours, 'journée') + ' tradée' + (a.nbJours > 1 ? 's' : ''), cls(a.moyenneJour)) +
+    chiffre('Journées vertes', a.joursVerts + '<span class="gris" style="font-size:15px"> / ' + a.nbJours + '</span>',
+      'verte moyenne ' + moy(a.moyenneJourVert) + ', rouge moyenne ' + moy(a.moyenneJourRouge)) +
+    chiffre('Trades par jour', fmtNombre(a.tradesParJour, 1),
+      mp && mp.ecart > 0.005 ? 'plafond le plus rentable : ' + pl(mp.max, 'trade') + ' (' + signe(mp.ecart, 0) + ')'
+                             : 'aucun plafond ne fait mieux que toi') +
+    chiffre('Série en cours', a.serieActuelle ? a.serieActuelle.nb + '<span class="gris" style="font-size:15px"> ' +
+        (a.serieActuelle.sens === 'verte' ? 'verte' : 'rouge') + (a.serieActuelle.nb > 1 ? 's' : '') + '</span>' : '--',
+      'record : ' + a.serieVerteMax + ' verte' + (a.serieVerteMax > 1 ? 's' : '') + ' de suite, ' + a.serieRougeMax + ' rouge' + (a.serieRougeMax > 1 ? 's' : ''),
+      a.serieActuelle ? (a.serieActuelle.sens === 'verte' ? 'vert' : 'rouge') : '') +
+    '</div>';
+
+  // ---- le premier trade de la journee ----
+  var P = a.premier;
+  var NOM = { g: 'gagnant', be: 'BE', p: 'perdant' };
+  var v = [];
+  var arrets = ['g', 'be', 'p'].filter(function(k){ return P[k].nbJours; }).map(function(k){
+    return '<b>' + P[k].nbArret + ' fois sur ' + P[k].nbJours + '</b> quand il est ' + NOM[k];
+  });
+  v.push('Tu t\'arrêtes juste après ton premier trade ' + enListe(arrets) + '.');
+  if (P.g.nbContinue) {
+    v.push('Quand ton premier trade gagne et que tu continues, la suite de la journée ' +
+      (P.g.moyenneSuite >= 0 ? 'te rapporte encore <b class="vert">' + signe(P.g.moyenneSuite, 0) + '</b>'
+                             : 'te coûte <b class="rouge">' + fmtArgent(-P.g.moyenneSuite, 0) + '</b>') +
+      ' en moyenne (' + pl(P.g.nbContinue, 'journée') + ')' + (P.g.moyenneSuite < 0 ? ' : tu rends une partie de ton gain.' : '.'));
+  }
+  if (P.p.nbContinue) {
+    v.push('Après un premier trade perdant, continuer ' +
+      (P.p.moyenneSuite >= 0 ? 'te refait de <b class="vert">' + signe(P.p.moyenneSuite, 0) + '</b>'
+                             : 'creuse le trou de <b class="rouge">' + fmtArgent(-P.p.moyenneSuite, 0) + '</b> de plus') +
+      ' en moyenne (' + pl(P.p.nbContinue, 'journée') + ').');
+  }
+  if (P.be.nbContinue) {
+    v.push('Après un premier trade BE, la suite donne <b class="' + cls(P.be.moyenneSuite) + '">' + signe(P.be.moyenneSuite, 0) +
+      '</b> en moyenne (' + pl(P.be.nbContinue, 'journée') + ').');
+  }
+  var reel = a.regles[0];
+  var r1 = a.regles.filter(function(r){ return r.cle === 'max1'; })[0];
+  v.push('Si tu t\'arrêtais toujours après ton premier trade : <b class="' + cls(r1.total) + '">' + signe(r1.total, 0) + '</b> au lieu de <b class="' +
+    cls(reel.total) + '">' + signe(reel.total, 0) + '</b>.');
+  html += '<div class="carte"><h3>Ton premier trade de la journée, et ce que tu fais ensuite</h3>' +
+    '<div class="verdict" style="margin-bottom:12px">' + v.join(' ') + '</div>' +
+    '<div class="niveaux3">' + [
+      ['g', 'h', 'Premier trade gagnant', 'plus de +' + fmtNombre(seuil, 0) + ' $'],
+      ['be', 'm', 'Premier trade BE', 'entre -' + fmtNombre(seuil, 0) + ' et +' + fmtNombre(seuil, 0) + ' $'],
+      ['p', 'b', 'Premier trade perdant', 'moins de -' + fmtNombre(seuil, 0) + ' $']
+    ].map(function(d){
+      var x = P[d[0]];
+      return '<div class="niveau-carte ' + d[1] + '"><h4 style="margin-bottom:4px">' + d[2] + ' <span class="gris">' + d[3] + '</span></h4>' +
+        (x.nbJours ?
+          '<div class="grand ' + cls(x.moyenneJour) + '">' + moy(x.moyenneJour) + '</div>' +
+          '<div class="petit gris" style="margin-bottom:8px">résultat moyen de la journée, sur ' + pl(x.nbJours, 'journée') + '</div>' +
+          '<table><tbody>' +
+            ligne('Premier trade moyen', moy(x.moyennePremier), cls(x.moyennePremier)) +
+            ligne('Tu t\'arrêtes là', x.nbArret + ' / ' + x.nbJours + ' <span class="gris">(' + pct(x.nbArret, x.nbJours) + ')</span>') +
+            ligne('Quand tu continues, la suite rapporte', x.nbContinue ? moy(x.moyenneSuite) + ' <span class="gris">par jour</span>' : '<span class="gris">jamais continué</span>',
+              x.nbContinue ? cls(x.moyenneSuite) : '') +
+            ligne('Trades pris ensuite', x.nbContinue ? fmtNombre(x.tradesApres, 1) + ' en moyenne' : '--') +
+            ligne('Suite positive', x.nbContinue ? x.suitesPositives + ' / ' + x.nbContinue : '--') +
+            ligne('Total de ce que tu as fait ensuite', x.nbContinue ? signe(x.totalSuite, 0) : '--', x.nbContinue ? cls(x.totalSuite) : '') +
+            ligne('Journées finies vertes', x.joursVerts + ' / ' + x.nbJours + ' <span class="gris">(' + pct(x.joursVerts, x.nbJours) + ')</span>') +
+          '</tbody></table>'
+        : '<div class="petit gris" style="padding:18px 0">Aucune journée qui commence comme ça sur la plage.</div>') +
+        '</div>';
+    }).join('') + '</div></div>';
+
+  // ---- les regles d'arret ----
+  var meilleure = a.regles.slice(1).reduce(function(m, r){ return !m || r.total > m.total ? r : m; }, null);
+  var vr = '';
+  if (meilleure && meilleure.ecart > 0.005) {
+    vr = 'Sur cette plage, la règle qui t\'aurait le plus rapporté : <b>' + ech(meilleure.nom) + '</b>. Résultat <b class="' + cls(meilleure.total) + '">' +
+      signe(meilleure.total, 0) + '</b> au lieu de <b class="' + cls(reel.total) + '">' + signe(reel.total, 0) + '</b>, soit <b class="vert">' +
+      signe(meilleure.ecart, 0) + '</b>.';
+    if (meilleure.pireJour !== null && reel.pireJour !== null && meilleure.pireJour > reel.pireJour + 0.005) {
+      vr += ' Ta pire journée aurait été de <b>' + fmtArgent(meilleure.pireJour, 0) + '</b> au lieu de <b class="rouge">' + fmtArgent(reel.pireJour, 0) + '</b>.';
+    }
+  } else {
+    vr = 'Aucune de ces règles d\'arrêt n\'aurait fait mieux que ce que tu as fait sur cette plage : tes trades de fin de journée ont rapporté.';
+  }
+  html += '<div class="carte"><h3>Quand t\'arrêter ? Tes règles d\'arrêt rejouées sur ton historique</h3>' +
+    '<div class="verdict" style="margin-bottom:10px">' + vr + '</div>' +
+    '<div class="tableau-boite"><table><thead><tr><th style="min-width:210px">Règle</th><th class="num">Résultat</th>' +
+    '<th class="num">Écart avec le réel</th><th class="num">Trades pris</th><th class="num">Taux de réussite</th>' +
+    '<th class="num">Journées vertes</th><th class="num">Pire journée</th><th class="num">Recul max</th></tr></thead><tbody>' +
+    a.regles.map(function(r){
+      var top = meilleure && r === meilleure && r.ecart > 0.005;
+      return '<tr' + (r.cle === 'reel' ? ' class="gras"' : '') + '><td style="white-space:normal">' + ech(r.nom) +
+        (top ? ' <span class="puce v">la meilleure</span>' : '') + '</td>' +
+        '<td class="num gras ' + cls(r.total) + '">' + signe(r.total, 0) + '</td>' +
+        '<td class="num ' + (r.cle === 'reel' ? 'gris' : cls(r.ecart)) + '">' + (r.cle === 'reel' ? '--' : signe(r.ecart, 0)) + '</td>' +
+        '<td class="num">' + r.nbTrades + '</td>' +
+        '<td class="num">' + (r.tauxReussite === null ? '--' : fmtNombre(r.tauxReussite * 100, 0) + ' %') + '</td>' +
+        '<td class="num">' + r.joursVerts + ' / ' + r.nbJours + '</td>' +
+        '<td class="num ' + cls(r.pireJour) + '">' + fmtArgent(r.pireJour, 0) + '</td>' +
+        '<td class="num rouge">' + fmtArgent(-r.ddMax, 0) + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<h4 style="margin-top:16px">Avec un plafond de trades par jour</h4>' +
+    barres(a.plafonds.map(function(p){
+      return { etq: pl(p.max, 'trade') + ' max', val: p.total, extra: p.nbTrades + ' tr.',
+               bulle: 'Au plus ' + pl(p.max, 'trade') + ' par jour : ' + signe(p.total, 0) + ', ' + signe(p.ecart, 0) + ' par rapport au réel' };
+    }).concat([{ etq: 'Sans plafond', val: reel.total, extra: reel.nbTrades + ' tr.', bulle: 'Ce que tu as fait' }])) +
+    '<div class="petit gris" style="margin-top:8px">Rejoué sur tes vrais trades : dans chaque journée, on garde les trades dans l\'ordre ' +
+    'jusqu\'à celui qui déclenche la règle, et on retire les suivants. C\'est une estimation : avec une autre règle, tu n\'aurais ' +
+    'peut-être pas pris exactement les mêmes trades.' +
+    (rg.perteJourMax > 0 ? '' : ' Mets une perte max du jour dans Réglages pour tester aussi cette règle-là.') + '</div></div>';
+
+  // ---- le rang du trade dans la journee ----
+  var r1er = a.rangs[0], suivants = a.rangs.slice(1);
+  var nbS = suivants.reduce(function(s, g){ return s + g.nb; }, 0), netS = suivants.reduce(function(s, g){ return s + g.net; }, 0);
+  html += '<div class="carte"><h3>Ton 1er, 2e, 3e trade de la journée</h3>' +
+    (r1er && nbS ? '<div class="verdict" style="margin-bottom:10px">Ton premier trade de la journée rapporte en moyenne <b class="' + cls(r1er.moyenne) + '">' +
+      signe(r1er.moyenne, 0) + '</b>' + (r1er.taux === null ? '' : ' (' + fmtNombre(r1er.taux * 100, 0) + ' % de réussite)') +
+      '. Tous les suivants ensemble : <b class="' + cls(netS / nbS) + '">' + signe(netS / nbS, 0) + '</b> par trade, sur ' + pl(nbS, 'trade') + '.</div>' : '') +
+    tableauGroupes(a.rangs, 'Rang dans la journée') +
+    '<div class="petit gris" style="margin-top:8px">Si le profit moyen baisse à chaque rang, tes meilleures occasions sont les premières de la journée : la suite, c\'est surtout de l\'exposition en plus.</div></div>';
+
+  // ---- apres un gain, apres une perte ----
+  var AP = {};
+  a.apres.forEach(function(x){ AP[x.cle] = x; });
+  var NOMS_APRES = { g: 'Après un gain', be: 'Après un BE', p: 'Après une perte', p2: 'Après 2 pertes de suite' };
+  var va = '';
+  if (AP.p.nb && AP.g.nb) {
+    va = 'Après une perte, ton trade suivant rapporte en moyenne <b class="' + cls(AP.p.moyenne) + '">' + signe(AP.p.moyenne, 0) + '</b>' +
+      (AP.p.taux === null ? '' : ' (' + fmtNombre(AP.p.taux * 100, 0) + ' % de réussite)') + ', contre <b class="' + cls(AP.g.moyenne) + '">' +
+      signe(AP.g.moyenne, 0) + '</b> après un gain.';
+    if (AP.p.delaiMoyen !== null && AP.g.delaiMoyen !== null && AP.p.delaiMoyen < AP.g.delaiMoyen * 0.7) {
+      va += ' Tu reprends aussi plus vite après une perte (<b>' + fmtDuree(AP.p.delaiMoyen * 60) + '</b>) qu\'après un gain (<b>' +
+        fmtDuree(AP.g.delaiMoyen * 60) + '</b>) : c\'est souvent le trade pris pour se refaire.';
+    }
+    if (AP.p2.nb) va += ' Après 2 pertes de suite : <b class="' + cls(AP.p2.moyenne) + '">' + signe(AP.p2.moyenne, 0) + '</b> en moyenne sur ' + pl(AP.p2.nb, 'trade') + '.';
+  }
+  var lignesApres = a.apres.filter(function(x){ return x.nb; });
+  html += '<div class="carte"><h3>Après un gain, après une perte</h3>' +
+    (va ? '<div class="verdict" style="margin-bottom:10px">' + va + '</div>' : '') +
+    (lignesApres.length ?
+      '<div class="tableau-boite"><table><thead><tr><th>Le trade d\'avant</th><th class="num">Trades suivants</th><th class="num">Taux de réussite</th>' +
+      '<th class="num">Profit moyen</th><th class="num">Total</th><th class="num">Délai avant de reprendre</th></tr></thead><tbody>' +
+      lignesApres.map(function(x){
+        return '<tr><td>' + NOMS_APRES[x.cle] + '</td><td class="num">' + x.nb + '</td>' +
+          '<td class="num">' + (x.taux === null ? '--' : fmtNombre(x.taux * 100, 0) + ' %') + '</td>' +
+          '<td class="num ' + cls(x.moyenne) + '">' + moy(x.moyenne) + '</td>' +
+          '<td class="num gras ' + cls(x.net) + '">' + signe(x.net, 0) + '</td>' +
+          '<td class="num">' + fmtDuree(x.delaiMoyen * 60) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : '<div class="vide">Il faut des journées avec au moins 2 trades.</div>') +
+    '<div class="petit gris" style="margin-top:8px">Seulement deux trades qui se suivent dans la même journée, le second ouvert après la sortie du premier ' +
+    '(tu connaissais donc son résultat). Le délai va de la sortie du trade d\'avant à l\'entrée du suivant. La ligne « 2 pertes de suite » est aussi comptée dans « après une perte ».</div></div>';
+
+  // ---- le nombre de trades dans la journee ----
+  var meilleurN = a.parNombre.reduce(function(m, p){ return !m || p.moyenneJour > m.moyenneJour ? p : m; }, null);
+  var pireN = a.parNombre.reduce(function(m, p){ return !m || p.moyenneJour < m.moyenneJour ? p : m; }, null);
+  html += '<div class="carte"><h3>Combien de trades dans la journée</h3>' +
+    (a.parNombre.length > 1 ? '<div class="verdict" style="margin-bottom:10px">Tes meilleures journées sont celles à <b>' + meilleurN.nom + '</b> : <b class="' +
+      cls(meilleurN.moyenneJour) + '">' + signe(meilleurN.moyenneJour, 0) + '</b> par jour en moyenne. Les moins bonnes : <b>' + pireN.nom + '</b>, <b class="' +
+      cls(pireN.moyenneJour) + '">' + signe(pireN.moyenneJour, 0) + '</b>.</div>' : '') +
+    '<div class="tableau-boite"><table><thead><tr><th>Journées à</th><th class="num">Journées</th><th class="num">Profit moyen par jour</th>' +
+    '<th class="num">Journées vertes</th><th class="num">Total</th></tr></thead><tbody>' +
+    a.parNombre.map(function(p){
+      return '<tr><td>' + p.nom + '</td><td class="num">' + p.nbJours + '</td>' +
+        '<td class="num gras ' + cls(p.moyenneJour) + '">' + moy(p.moyenneJour) + '</td>' +
+        '<td class="num">' + p.joursVerts + ' / ' + p.nbJours + ' <span class="gris">(' + pct(p.joursVerts, p.nbJours) + ')</span></td>' +
+        '<td class="num ' + cls(p.total) + '">' + signe(p.total, 0) + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="petit gris" style="margin-top:8px">Attention au sens de lecture : une journée à 1 trade peut être courte parce que ce trade a gagné. ' +
+    'Le tableau des règles d\'arrêt, plus haut, répond plus directement à la question « combien de trades prendre ».</div></div>';
+
+  // ---- le sommet de la journee contre la cloture ----
+  var so = a.sommet;
+  html += '<div class="carte"><h3>Ton sommet de la journée contre ta clôture</h3>';
+  if (so.nbJours) {
+    html += '<div class="grille g4" style="margin-bottom:10px">' +
+      chiffre('Sommet moyen en séance', moy(so.moyenneHaut), 'sur ' + pl(so.nbJours, 'journée') + ' passée' + (so.nbJours > 1 ? 's' : '') + ' au-dessus de +' + fmtNombre(seuil, 0) + ' $', 'vert') +
+      chiffre('Clôture ces jours-là', moy(so.moyenneCloture), 'en moyenne', cls(so.moyenneCloture)) +
+      chiffre('Rendu en moyenne', fmtArgent(-so.moyenneRendu, 0), (so.partRendue === null ? '' : fmtNombre(so.partRendue * 100, 0) + ' % du sommet rendu, ') +
+        fmtArgent(-so.totalRendu, 0) + ' au total', so.moyenneRendu > 0.005 ? 'rouge' : '') +
+      chiffre('Vertes finies rouges', a.vertesFiniesRouges.length, 'rouges remontées en vertes : ' + a.rougesFiniesVertes.length,
+        a.vertesFiniesRouges.length ? 'rouge' : 'vert') +
+      '</div>';
+    if (a.vertesFiniesRouges.length) {
+      html += '<h4>Journées où tu as été vert, puis fini rouge</h4><div class="liste-pieces">' +
+        a.vertesFiniesRouges.slice().reverse().slice(0, 8).map(function(x){
+          return '<div class="piece" data-vers-jour="' + x.cle + '"><div style="flex:1 1 auto"><div class="t">' + fmtJourLong(x.cle) + '</div>' +
+            '<div class="d">monté jusqu\'à ' + signe(x.haut, 0) + ' pendant la séance</div></div>' +
+            '<div class="' + cls(x.net) + ' gras nowrap">' + signe(x.net, 0) + '</div></div>';
+        }).join('') + '</div>';
+    }
+    html += '<div class="petit gris" style="margin-top:8px">Le sommet est le plus haut atteint par le profit de la journée, trade fermé après trade fermé. ' +
+      'Les gains flottants pendant un trade ne sont pas comptés : le CSV ne les donne pas.</div>';
+  } else {
+    html += '<div class="petit gris">Aucune journée passée au-dessus de +' + fmtNombre(seuil, 0) + ' $ sur la plage.</div>';
+  }
+  html += '</div>';
+
+  $('#statsJournees').innerHTML = html;
+  brancherStatsJournees();
+}
+
+function brancherStatsJournees(){
+  var champ = $('#stSeuilBE');
+  if (champ) champ.onchange = async function(){
+    var v = parseFloat(this.value);
+    E.reglages.seuilBE = isFinite(v) && v >= 0 ? v : SEUIL_BE_DEFAUT;
+    await dbMettre('reglages', E.reglages);
+    rendreStats();
+  };
+  $$('#statsJournees [data-vers-jour]').forEach(function(d){
+    d.onclick = function(){ E.journalDate = d.dataset.versJour; allerA('journal'); };
+  });
 }
 
 /* =======================================================================
@@ -5452,6 +5981,7 @@ function lancerAutotest(){
 function brancher(){
   // navigation
   $$('#nav button').forEach(function(b){ b.onclick = function(){ allerA(b.dataset.ecran); }; });
+  $$('#statsOnglets button').forEach(function(b){ b.onclick = function(){ E.ongletStats = b.dataset.onglet; rendreStats(); }; });
 
   // plage de dates
   $('#plageDebut').onchange = function(){

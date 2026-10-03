@@ -210,8 +210,19 @@ dans le journal, après confirmation.
   La plage de dates s'applique partout et vaut **tout l'historique** par défaut.
 - **Calendrier** : une case par jour, verte ou rouge. Le liseré rouge et le ⚠ veulent dire
   qu'une de tes limites de risque a été dépassée ce jour-là. Clic sur un jour pour le détail.
-- **Statistiques** : par étiquette, par heure d'entrée, par jour de la semaine, par symbole,
-  par note d'exécution. C'est là que tu vois ce que « Plan violé » te coûte.
+- **Statistiques**, deux onglets :
+  - **Tes journées** : comment se déroule une journée. Ton **premier trade** (gagnant, BE ou
+    perdant) et ce que tu fais ensuite : combien de fois tu t'arrêtes là, ce que la suite te
+    rapporte ou te coûte. Tes **règles d'arrêt rejouées** sur ton historique (1, 2 ou 3 trades
+    max, arrêt au premier gain, à la première perte, à ta perte max...) avec la meilleure en
+    évidence. Ton 1er, 2e, 3e trade de la journée. Ce que tu fais **après un gain, après une
+    perte**, et à quelle vitesse tu reprends. Le nombre de trades par jour. Et ton **sommet de
+    la journée** contre ta clôture : ce que tu rends en continuant.
+    Un trade compte comme BE s'il finit entre -10 $ et +10 $ ; le seuil se change en haut
+    de l'onglet et reste enregistré.
+  - **Par catégorie** : par étiquette, par heure d'entrée, par jour de la semaine, long contre
+    short, par durée du trade, par taille de position, par symbole, par note d'exécution, par
+    qualité du setup. C'est là que tu vois ce que « Plan violé » te coûte.
 - **Playbooks** : tes stratégies et leurs règles. Chaque stratégie a ses propres chiffres,
   dont le pourcentage de fois où tu l'as suivie en entier.
 - **Respect des règles** : pour chaque règle, ton résultat quand tu la respectes contre ton
@@ -264,7 +275,7 @@ avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 110 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 169 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash

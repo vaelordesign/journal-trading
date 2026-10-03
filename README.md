@@ -17,7 +17,11 @@ aucune donnée qui sort du navigateur.
 - **Calendrier** mensuel, vert ou rouge, avec les journées hors limites de risque.
 - **Détail d'un trade** : captures d'écran collées au Ctrl+V, stop et cible prévus,
   R planifié et R obtenu, étiquettes ICT, note d'exécution, notes libres.
-- **Statistiques par étiquette**, par heure, par jour de semaine, par symbole.
+- **Statistiques de tes journées** : le premier trade et ce qui suit (arrêt ou non, ce que rapporte
+  la suite), les règles d'arrêt rejouées sur l'historique, le rang du trade dans la journée, le trade
+  qui suit un gain ou une perte, le sommet de la journée contre la clôture.
+- **Statistiques par catégorie** : étiquette, heure, jour de semaine, long ou short, durée, taille,
+  symbole, note d'exécution, qualité du setup.
 - **Playbooks** : des règles cochables par trade, et un écran qui chiffre ce que
   coûte chaque règle violée.
 - **Discipline** : chaque jour, une note de 1 à 10, l'état avant la séance (sommeil, énergie,

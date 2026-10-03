@@ -29,7 +29,8 @@ const M = new Function(code + `
            lireFillsDepuisCSV, regrouperEnTrades, statsDeTrades, noteGlobale,
            rRealise, rPlanifie, risqueDollars, fmtArgent, multiplicateurDe,
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
-           lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite };
+           lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
+           analyseJournees, resultatDe, trancheDuree, trancheTaille };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -319,6 +320,91 @@ const anObj = M.analyseDiscipline([
 verifier('objectif tenu 2 fois', anObj.objectifs.tenus, 2);
 verifier('profit moyen quand tenu', anObj.objectifs.moyenneTenu, 75);
 verifier('profit moyen quand pas tenu', anObj.objectifs.moyennePasTenu, -90);
+
+titre('17. Tes journees : premier trade, regles d\'arret, rang, apres une perte, sommet');
+// 5 journees, seuil BE de 10 $, perte max du jour 300 $. Tout est calcule a la main ci-dessous.
+const dj = (jour, ouv, ferm, net, cle) => ({ cle, net, brut: net, commission: 0, qte: 1,
+  ouverture: new Date('2026-09-' + jour + 'T' + ouv).getTime(), fermeture: new Date('2026-09-' + jour + 'T' + ferm).getTime() });
+const tj = [
+  // 14 sept. : gain, perte, perte, gain = +120 (sommet +200)
+  dj(14, '09:30:00', '09:40:00', 200, 'a1'), dj(14, '09:50:00', '10:00:00', -50, 'a2'),
+  dj(14, '10:05:00', '10:10:00', -60, 'a3'), dj(14, '10:11:00', '10:20:00', 30, 'a4'),
+  // 15 sept. : perte, perte, gain, gain = +100 (creux -350, finit vert)
+  dj(15, '09:30:00', '09:35:00', -100, 'b1'), dj(15, '09:40:00', '09:50:00', -250, 'b2'),
+  dj(15, '09:55:00', '10:00:00', 50, 'b3'), dj(15, '10:05:00', '10:10:00', 400, 'b4'),
+  // 16 sept. : BE (+5) puis gain = +45
+  dj(16, '09:30:00', '09:31:00', 5, 'c1'), dj(16, '09:40:00', '09:45:00', 40, 'c2'),
+  // 17 sept. : un seul trade gagnant = +150
+  dj(17, '09:30:00', '09:40:00', 150, 'd1'),
+  // 18 sept. : gain puis perte = -80 (verte a +100, finie rouge), donnes dans le desordre expres
+  dj(18, '09:45:00', '09:50:00', -180, 'e2'), dj(18, '09:30:00', '09:40:00', 100, 'e1')
+];
+const aj = M.analyseJournees(tj, { seuilBE: 10, perteJourMax: 300 });
+verifier('BE : +10 pile reste BE', M.resultatDe(10, 10), 'be');
+verifier('BE : +10,01 est gagnant', M.resultatDe(10.01, 10), 'g');
+verifier('BE : -10 pile reste BE', M.resultatDe(-10, 10), 'be');
+verifier('seuil 0 : seul 0,00 est BE', M.resultatDe(0.5, 0) + M.resultatDe(0, 0), 'gbe');
+verifier('5 journees, 13 trades', aj.nbJours + '/' + aj.nbTrades, '5/13');
+verifier('journee moyenne (120+100+45+150-80)/5', aj.moyenneJour, 67);
+verifier('4 vertes, 1 rouge', aj.joursVerts + '/' + aj.joursRouges, '4/1');
+verifier('verte moyenne 415/4', aj.moyenneJourVert, 103.75);
+verifier('record de vertes de suite', aj.serieVerteMax, 4);
+verifier('serie en cours : 1 rouge', aj.serieActuelle.sens + aj.serieActuelle.nb, 'rouge1');
+const pg = aj.premier.g, pp = aj.premier.p, pb = aj.premier.be;
+verifier('premier gagnant : 3 journees', pg.nbJours, 3);
+verifier('premier gagnant : premier trade moyen (200+150+100)/3', pg.moyennePremier, 150);
+verifier('premier gagnant : arrete 1 fois (le 17)', pg.nbArret, 1);
+verifier('premier gagnant : la suite coute (-80-180)/2', pg.moyenneSuite, -130);
+verifier('premier gagnant : 2 trades pris ensuite en moyenne', pg.tradesApres, 2);
+verifier('premier gagnant : journee moyenne (120+150-80)/3', pg.moyenneJour, 190 / 3);
+verifier('premier gagnant : 2 journees finies vertes', pg.joursVerts, 2);
+verifier('premier perdant : la suite refait +200', pp.moyenneSuite, 200);
+verifier('premier perdant : journee a +100', pp.moyenneJour, 100);
+verifier('premier BE (+5 sous le seuil de 10) : suite +40', pb.moyenneSuite, 40);
+const rgl = cle => aj.regles.filter(r => r.cle === cle)[0];
+verifier('regle reel = total', rgl('reel').total, 335);
+verifier('1 trade max : 200-100+5+150+100', rgl('max1').total, 355);
+verifier('2 trades max', rgl('max2').total, -85);
+verifier('3 trades max', rgl('max3').total, -95);
+verifier('arret au premier gagnant (le 15 s\'arrete a b3)', rgl('gain1').total, 195);
+verifier('arret des que la journee est verte (le 15 va jusqu\'a b4)', rgl('vert').total, 595);
+verifier('arret a la premiere perte', rgl('perte1').total, 165);
+verifier('arret a la deuxieme perte', rgl('perte2').total, -145);
+verifier('arret a la perte max de 300 (le 15 s\'arrete a -350)', rgl('perteMax').total, -115);
+verifier('ecart de la regle "verte" avec le reel', rgl('vert').ecart, 260);
+verifier('trades pris avec 1 trade max', rgl('max1').nbTrades, 5);
+verifier('pire journee avec arret a la perte max', rgl('perteMax').pireJour, -350);
+verifier('sans perte max dans les reglages, la regle disparait',
+  M.analyseJournees(tj, { seuilBE: 10 }).regles.some(r => r.cle === 'perteMax'), false);
+verifier('plafonds de 1 a 4 trades', aj.plafonds.map(p => p.total).join(','), '355,-85,-95,335');
+verifier('meilleur plafond : 1 trade', aj.meilleurPlafond.max, 1);
+verifier('rangs presents : 1er a 4e', aj.rangs.length, 4);
+verifier('1er trade : moyenne 355/5', aj.rangs[0].moyenne, 71);
+verifier('2e trade : total -440', aj.rangs[1].net, -440);
+verifier('4e trade : total 430', aj.rangs[3].net, 430);
+const ap = cle => aj.apres.filter(x => x.cle === cle)[0];
+verifier('apres un gain : 3 trades, total 170', ap('g').nb + '/' + ap('g').net, '3/170');
+verifier('apres un gain : delai moyen (10+5+5)/3 min', ap('g').delaiMoyen, 20 / 3);
+verifier('apres une perte : 4 trades, moyenne -57,50', ap('p').moyenne, -57.5);
+verifier('apres une perte : delai moyen (5+1+5+5)/4 min', ap('p').delaiMoyen, 4);
+verifier('apres un BE : 1 trade de +40', ap('be').net, 40);
+verifier('apres 2 pertes de suite : a4 et b3, +80', ap('p2').nb + '/' + ap('p2').net, '2/80');
+verifier('journees a 4 ou 5 trades : 2, +110 par jour', aj.parNombre.filter(p => p.nom === '4 ou 5 trades')[0].moyenneJour, 110);
+verifier('aucune journee a 3 trades : ligne absente', aj.parNombre.some(p => p.nom === '3 trades'), false);
+verifier('sommet moyen (200+100+45+150+100)/5', aj.sommet.moyenneHaut, 119);
+verifier('rendu moyen (80+0+0+0+180)/5', aj.sommet.moyenneRendu, 52);
+verifier('part du sommet rendue 260/595', aj.sommet.partRendue, 260 / 595, 0.0001);
+verifier('verte finie rouge : le 18', aj.vertesFiniesRouges.map(x => x.cle).join(','), '2026-09-18');
+verifier('rouge finie verte : le 15', aj.rougesFiniesVertes.map(x => x.cle).join(','), '2026-09-15');
+// un trade ouvert pendant que le precedent tournait n'est pas "apres" lui
+const chev = M.analyseJournees([dj(19, '10:00:00', '10:30:00', -100, 'x1'), dj(19, '10:10:00', '10:20:00', 50, 'x2')], {});
+verifier('trades qui se chevauchent : pas comptes dans "apres une perte"', chev.apres.reduce((a, x) => a + x.nb, 0), 0);
+verifier('seuil BE par defaut : 10', chev.seuilBE, 10);
+verifier('aucun trade : rien ne casse', M.analyseJournees([], {}).nbJours, 0);
+verifier('tranche de duree 59 s', M.trancheDuree(59), 'Moins de 1 min');
+verifier('tranche de duree 1 h pile', M.trancheDuree(3600), '1 h et plus');
+verifier('tranche de taille 4 contrats', M.trancheTaille(4), '4 à 5 contrats');
+verifier('tranche de taille 20 contrats', M.trancheTaille(20), '11 contrats et plus');
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');
