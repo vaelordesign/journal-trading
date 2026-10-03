@@ -301,7 +301,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .editeur:empty:before{content:attr(data-vide);color:var(--texte3)}
 
 .lignes-onglets{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
-.lignes-onglets button.actif{background:var(--accent-fond);color:#fff;border-color:var(--accent)}
+.lignes-onglets button.actif{background:var(--fond4);color:#fff;border-color:var(--bord2)}
 
 .liste-pieces{display:flex;flex-direction:column;gap:6px}
 .piece{
@@ -420,6 +420,7 @@ svg text{font-family:inherit}
     <button data-ecran="calendrier">Calendrier</button>
     <button data-ecran="trades">Trades</button>
     <button data-ecran="stats">Statistiques</button>
+    <button data-ecran="journees">Tes journées</button>
     <button data-ecran="playbooks">Playbooks</button>
     <button data-ecran="regles">Respect des règles</button>
     <button data-ecran="journal">Journal quotidien</button>
@@ -573,33 +574,32 @@ svg text{font-family:inherit}
 
   <!-- ============ STATISTIQUES ============ -->
   <section class="ecran" id="ec-stats">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-      <h1 style="margin:0">Statistiques</h1>
-      <div class="lignes-onglets" id="statsOnglets" style="margin:0 0 0 auto">
-        <button class="pt" data-onglet="journees">Tes journées</button>
-        <button class="pt" data-onglet="categories">Par catégorie</button>
-      </div>
+    <h1>Statistiques</h1>
+    <div class="avis bleuf">Ce que tu fais après ton premier trade, quand t'arrêter, et ce que tu fais après une perte :
+      c'est dans l'écran <a href="#journees" id="lienJournees"><b>Tes journées</b></a>, juste à côté dans le menu.</div>
+    <div class="carte">
+      <h3>Par étiquette <span class="petit gris">trié par profit total</span></h3>
+      <div id="statsEtiquettes"></div>
     </div>
+    <div class="grille g2">
+      <div class="carte"><h3>Par heure d'entrée</h3><div id="statsHeures"></div></div>
+      <div class="carte"><h3>Par jour de la semaine</h3><div id="statsJours"></div></div>
+    </div>
+    <div class="carte"><h3>Par symbole</h3><div id="statsSymboles"></div></div>
+    <div class="carte"><h3>Par note d'exécution</h3><div id="statsNotes"></div></div>
+    <div class="carte"><h3>Par qualité du setup</h3><div id="statsQualite"></div></div>
+    <div class="carte"><h3>Répartition des profits</h3><div id="statsHisto"></div></div>
+    <div class="carte"><h3>Long contre short</h3><div id="statsSens"></div></div>
+    <div class="grille g2">
+      <div class="carte"><h3>Par durée du trade</h3><div id="statsDurees"></div></div>
+      <div class="carte"><h3>Par taille de position</h3><div id="statsTailles"></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TES JOURNEES ============ -->
+  <section class="ecran" id="ec-journees">
+    <h1>Tes journées</h1>
     <div id="statsJournees"></div>
-    <div id="statsCategories">
-      <div class="carte">
-        <h3>Par étiquette <span class="petit gris">trié par profit total</span></h3>
-        <div id="statsEtiquettes"></div>
-      </div>
-      <div class="grille g2">
-        <div class="carte"><h3>Par heure d'entrée</h3><div id="statsHeures"></div></div>
-        <div class="carte"><h3>Par jour de la semaine</h3><div id="statsJours"></div></div>
-      </div>
-      <div class="carte"><h3>Long contre short</h3><div id="statsSens"></div></div>
-      <div class="grille g2">
-        <div class="carte"><h3>Par durée du trade</h3><div id="statsDurees"></div></div>
-        <div class="carte"><h3>Par taille de position</h3><div id="statsTailles"></div></div>
-      </div>
-      <div class="carte"><h3>Par symbole</h3><div id="statsSymboles"></div></div>
-      <div class="carte"><h3>Par note d'exécution</h3><div id="statsNotes"></div></div>
-      <div class="carte"><h3>Par qualité du setup</h3><div id="statsQualite"></div></div>
-      <div class="carte"><h3>Répartition des profits</h3><div id="statsHisto"></div></div>
-    </div>
   </section>
 
   <!-- ============ PLAYBOOKS ============ -->
@@ -1868,7 +1868,7 @@ function analyseDiscipline(jours, parJour, o){
 }
 
 /* ---------- LE DEROULEMENT DES JOURNEES ----------
-   Ce que calcule l'onglet Statistiques > Tes journees :
+   Ce que calcule l'ecran Tes journees :
      - le premier trade de la journee (gagnant, BE ou perdant) et ce qui suit ;
      - les regles d'arret rejouees sur l'historique (1 trade max, arret a la
        premiere perte, au premier gain...) et le meilleur plafond de trades ;
@@ -1958,7 +1958,7 @@ function bilanRegle(jours, regle, o){
   };
 }
 
-// Durees et tailles regroupees en tranches lisibles, pour l'onglet Par categorie.
+// Durees et tailles regroupees en tranches lisibles, pour l'ecran Statistiques.
 var TRANCHES_DUREE = ['Moins de 1 min', '1 à 5 min', '5 à 15 min', '15 à 60 min', '1 h et plus'];
 function trancheDuree(sec){
   var s = Number(sec) || 0;
@@ -2236,7 +2236,6 @@ var E = {
   tri: { col: 'fermeture', sens: -1 },
   journalDate: cleJour(Date.now()),
   carnetDossier: '',
-  ongletStats: 'journees',
   urls: [],
   pointsCourbe: [], pointsJours: []
 };
@@ -2598,9 +2597,9 @@ function joursTries(stats){
 /* =======================================================================
    NAVIGATION ET PLAGE DE DATES
    ======================================================================= */
-var ECRANS_AVEC_PLAGE = { bord: 1, trades: 1, stats: 1, playbooks: 1, regles: 1, discipline: 1 };
+var ECRANS_AVEC_PLAGE = { bord: 1, trades: 1, stats: 1, journees: 1, playbooks: 1, regles: 1, discipline: 1 };
 // Toute adresse qui n'est pas un de ces ecrans mene au profil public.
-var ECRANS_VALIDES = ['import', 'bord', 'calendrier', 'trades', 'stats', 'playbooks',
+var ECRANS_VALIDES = ['import', 'bord', 'calendrier', 'trades', 'stats', 'journees', 'playbooks',
                       'regles', 'journal', 'discipline', 'carnet', 'comparaison', 'reglages'];
 
 function allerA(ecran){
@@ -2642,7 +2641,7 @@ function rendre(){
   majChampsPlage();
   var f = {
     import: rendreImport, bord: rendreBord, calendrier: rendreCalendrier,
-    trades: rendreTrades, stats: rendreStats, playbooks: rendrePlaybooks,
+    trades: rendreTrades, stats: rendreStats, journees: rendreJournees, playbooks: rendrePlaybooks,
     regles: rendreRegles, journal: rendreJournal, discipline: rendreDiscipline, carnet: rendreCarnet,
     comparaison: rendreComparaison, reglages: rendreReglages
   }[E.ecran];
@@ -3657,10 +3656,6 @@ function tableauGroupes(groupes, nomColonne){
 
 function rendreStats(){
   var trades = tradesActifs();
-  $$('#statsOnglets button').forEach(function(b){ b.classList.toggle('actif', b.dataset.onglet === E.ongletStats); });
-  $('#statsJournees').hidden = E.ongletStats !== 'journees';
-  $('#statsCategories').hidden = E.ongletStats === 'journees';
-  if (E.ongletStats === 'journees') { rendreStatsJournees(trades); return; }
   if (!trades.length) {
     ['statsEtiquettes', 'statsHeures', 'statsJours', 'statsSens', 'statsDurees', 'statsTailles',
      'statsSymboles', 'statsNotes', 'statsQualite', 'statsHisto'].forEach(function(id){
@@ -3729,7 +3724,12 @@ function rendreStats(){
     '<div class="petit gris">Chaque barre est un intervalle de profit net, la hauteur est le nombre de trades.</div>';
 }
 
-/* ---------- onglet Tes journees ----------
+/* =======================================================================
+   ECRAN 6 bis : TES JOURNEES
+   ======================================================================= */
+function rendreJournees(){ rendreStatsJournees(tradesActifs()); }
+
+/* ---------- contenu de l'ecran Tes journees ----------
    Tout le calcul est dans analyseJournees (moteur, teste par verifier-moteur.cjs).
    Ici on ne fait que l'afficher et l'expliquer en phrases. */
 function rendreStatsJournees(trades){
@@ -3967,7 +3967,7 @@ function brancherStatsJournees(){
     var v = parseFloat(this.value);
     E.reglages.seuilBE = isFinite(v) && v >= 0 ? v : SEUIL_BE_DEFAUT;
     await dbMettre('reglages', E.reglages);
-    rendreStats();
+    rendre();
   };
   $$('#statsJournees [data-vers-jour]').forEach(function(d){
     d.onclick = function(){ E.journalDate = d.dataset.versJour; allerA('journal'); };
@@ -5981,7 +5981,7 @@ function lancerAutotest(){
 function brancher(){
   // navigation
   $$('#nav button').forEach(function(b){ b.onclick = function(){ allerA(b.dataset.ecran); }; });
-  $$('#statsOnglets button').forEach(function(b){ b.onclick = function(){ E.ongletStats = b.dataset.onglet; rendreStats(); }; });
+  $('#lienJournees').onclick = function(e){ e.preventDefault(); allerA('journees'); };
 
   // plage de dates
   $('#plageDebut').onchange = function(){
