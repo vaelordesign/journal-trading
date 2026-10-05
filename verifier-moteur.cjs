@@ -31,7 +31,7 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -457,6 +457,61 @@ verifier('aucun R : total 0, moyenne vide', M.bilanR([{ net: 10, fermeture: 1 }]
 const sR = M.statsDeTrades(tR);
 verifier('les stats generales comptent le R a la main : R moyen 0,7', sR.moyenneR, 0.7);
 verifier('et 5 trades avec un R', sR.nbAvecR, 5);
+
+titre('19. Note globale : ta strategie et ta discipline');
+verifier('echelle : esperance 0,2 = 55', M.surEchelle(0.2, M.NOTE_ECHELLES.esperance), 55);
+verifier('echelle : esperance 0,1 = 35 (entre 15 et 55)', M.surEchelle(0.1, M.NOTE_ECHELLES.esperance), 35);
+verifier('echelle : facteur 1,4 = 60 (entre 50 et 70)', M.surEchelle(1.4, M.NOTE_ECHELLES.facteur), 60);
+verifier('echelle : sous le bas = 0', M.surEchelle(-1, M.NOTE_ECHELLES.esperance), 0);
+verifier('echelle : au-dessus du haut = 100', M.surEchelle(5, M.NOTE_ECHELLES.facteur), 100);
+const jn = (jour, h, net, r) => ({ cle: 'n' + jour + h, net, brut: net, commission: 0, qte: 1, rManuel: r,
+  ouverture: new Date('2026-10-' + String(jour).padStart(2, '0') + 'T' + h).getTime(),
+  fermeture: new Date('2026-10-' + String(jour).padStart(2, '0') + 'T' + h).getTime() + 60000 });
+// 10 journees dans les limites (+200 puis -100), puis une journee hors limites (6 pertes de 100)
+const tN = [];
+for (let j = 1; j <= 10; j++) { tN.push(jn(j, '10:00:00', 200)); tN.push(jn(j, '11:00:00', -100)); }
+for (let k = 0; k < 6; k++) tN.push(jn(11, '1' + k + ':30:00', -100));
+const limN = { perteJourMax: 500, tradesJourMax: 4 };
+const nN = M.noteGlobale(tN, M.statsDeTrades(tN), limN);
+const sousDe = (bloc, nom) => bloc.sous.filter(x => x.nom === nom)[0].note;
+verifier('strategie : la journee hors limites est mise de cote', nN.strategie.joursExclus.join(','), '2026-10-11');
+verifier('strategie : 6 trades mis de cote pour -600', nN.strategie.nbExclus + '/' + nN.strategie.netExclus, '6/-600');
+verifier('strategie : mesuree sur 20 trades en dollars', nN.strategie.nbTrades + (nN.strategie.enR ? 'R' : '$'), '20$');
+verifier('strategie : facteur de profit 2,0 = 90', sousDe(nN.strategie, 'Facteur de profit'), 90);
+verifier('strategie : esperance 50 / 100 = 0,5 = 90', sousDe(nN.strategie, 'Espérance par trade'), 90);
+verifier('strategie : marge 50 % contre 33,3 % = 93,33', sousDe(nN.strategie, 'Marge de réussite'), 93.333, 0.01);
+verifier('strategie : 91 (20 trades, aucune retenue)', nN.strategie.total, 91);
+verifier('discipline : 10 journees sur 11 dans les limites', sousDe(nN.discipline, 'Journées dans tes limites'), 1000 / 11, 0.01);
+verifier('discipline : recul 400 / 700 = 0,571 -> 22,86', sousDe(nN.discipline, 'Recul contre gains'), 0.4 / 0.7 * 40, 0.01);
+verifier('discipline : regularite calculee', sousDe(nN.discipline, 'Régularité') > 30 && sousDe(nN.discipline, 'Régularité') < 32, true);
+verifier('note globale = moyenne des deux', nN.total, Math.round((91.111 + nN.discipline.sous.reduce((a, x) => a + x.note, 0) / 3) / 2));
+// sans limites dans les reglages : la mauvaise journee reste dans la strategie
+const nSans = M.noteGlobale(tN, M.statsDeTrades(tN), {});
+verifier('sans limites : rien de mis de cote', nSans.strategie.joursExclus.length, 0);
+verifier('sans limites : facteur 2000 / 1600 = 1,25 -> 44,17', sousDe(nSans.strategie, 'Facteur de profit'), 15 + 35 * 0.25 / 0.3, 0.01);
+verifier('sans limites : "journees dans tes limites" non calculable', sousDe(nSans.discipline, 'Journées dans tes limites'), null);
+// 8 trades seulement : la note de strategie est ramenee vers 50
+const tPeu = [];
+for (let j = 1; j <= 4; j++) { tPeu.push(jn(j, '10:00:00', 300)); tPeu.push(jn(j, '11:00:00', -100)); }
+const nPeu = M.noteGlobale(tPeu, M.statsDeTrades(tPeu), limN);
+verifier('8 trades : note brute 100', nPeu.strategie.brute, 100);
+verifier('8 trades : ramenee a 50 + 50 x 8/20 = 70', nPeu.strategie.total, 70);
+// 10 trades avec un R : la strategie passe en R
+const tR10 = [];
+for (let j = 1; j <= 5; j++) { tR10.push(jn(j, '10:00:00', 150, 2)); tR10.push(jn(j, '11:00:00', -80, -1)); }
+const nR = M.noteGlobale(tR10, M.statsDeTrades(tR10), limN);
+verifier('10 trades avec un R : mesuree en R', nR.strategie.enR, true);
+verifier('en R : esperance 0,5 R = 90', sousDe(nR.strategie, 'Espérance par trade'), 90);
+verifier('en R : facteur 10 R / 5 R = 2 -> 90', sousDe(nR.strategie, 'Facteur de profit'), 90);
+verifier('en R : 10 trades, note 50 + 41,11 x 0,5 = 71', nR.strategie.total, 71);
+const nR9 = M.noteGlobale(tR10.slice(1), M.statsDeTrades(tR10.slice(1)), limN);
+verifier('9 trades avec un R seulement : reste en dollars', nR9.strategie.enR, false);
+// aucune perte
+const tGain = [jn(1, '10:00:00', 100), jn(2, '10:00:00', 50), jn(3, '10:00:00', 80)];
+const nGain = M.noteGlobale(tGain, M.statsDeTrades(tGain), limN);
+verifier('aucune perte : facteur de profit 100', sousDe(nGain.strategie, 'Facteur de profit'), 100);
+verifier('aucune perte : esperance non calculable', sousDe(nGain.strategie, 'Espérance par trade'), null);
+verifier('aucun trade : pas de note', M.noteGlobale([], M.statsDeTrades([]), limN).total, null);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

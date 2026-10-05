@@ -13,7 +13,8 @@ aucune donnée qui sort du navigateur.
   (position suivie symbole par symbole, prix moyen pondéré, sorties partielles,
   retournements de position, multiplicateurs des contrats à terme).
 - **Tableau de bord** : profit net, taux de réussite, facteur de profit, profit moyen,
-  note globale sur 100 détaillée en 6 sous-notes, courbe de capital, profit par jour.
+  note sur 100 en deux parties (ta stratégie, mesurée sans les journées hors limites et en R
+  quand c'est possible ; ta discipline), courbe de capital, profit par jour.
 - **Calendrier** mensuel, vert ou rouge, avec les journées hors limites de risque.
 - **Détail d'un trade** : captures d'écran collées au Ctrl+V, stop et cible prévus,
   R planifié et R obtenu, étiquettes ICT, note d'exécution, notes libres.

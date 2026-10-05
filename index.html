@@ -339,6 +339,10 @@ svg text{font-family:inherit}
 }
 .anneau .centre-txt small{display:block;font-size:10px;color:var(--texte2);font-weight:500;text-align:center;letter-spacing:.06em}
 .bloc-sous-notes{flex:1 1 300px;min-width:260px}
+.note-groupe+.note-groupe{margin-top:12px}
+.note-titre{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;font-weight:600}
+.note-titre b{font-size:18px;font-variant-numeric:tabular-nums}
+.note-titre b small{font-size:11px;color:var(--texte3);font-weight:500}
 
 /* ===================== DISCIPLINE ===================== */
 .echelle10{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px}
@@ -1469,76 +1473,167 @@ function ecartType(valeurs){
 }
 
 /* ---------- NOTE GLOBALE SUR 100 ----------
-   6 elements notes chacun sur 100 puis moyennes (les elements impossibles a
-   calculer sont exclus de la moyenne au lieu de compter zero).
-   Les seuils sont ici, en clair, pour etre ajustes :
+   Deux notes sur 100, puis leur moyenne. Les seuils sont ici, en clair.
 
-   1. Facteur de profit   note = 100 x (PF / 3)                      PF 3.0 = 100
-   2. Taux de reussite    note = 100 x (TR / 0.60)                   60 % = 100
-   3. R moyen             note = 100 x (gain moyen / perte moyenne / 2)   ratio 2 = 100
-   4. Coherence           note = 100 x (1 - ecartType / (2 x moyenne des |jours|))
-                          journee type reguliere = 100, dispersion double = 0
-   5. Respect playbooks   note = 100 x (regles cochees / regles applicables)
-   6. Controle du risque  note = 100 - 100 x (trades ou la perte a depasse le stop / trades avec stop)
-*/
+   TA STRATEGIE : ce que rapportent tes trades quand tu restes dans tes limites.
+   Les journees ou tu depasses ta perte max du jour ou ton nombre de trades max
+   (Reglages) sont mises de cote : ces trades-la ne sont pas ta strategie, c'est la
+   note de discipline qui les paie. Si au moins 10 des trades gardes ont un R
+   (ecrit a la main ou calcule depuis le stop), tout se mesure en R, la mesure la
+   plus juste d'une strategie ; sinon en dollars.
+     1. Esperance par trade   R moyen (en dollars : profit moyen / perte moyenne)
+                              -0,3 = 0, 0 = 15, 0,2 = 55, 0,35 = 75, 0,5 = 90, 0,7 et plus = 100
+     2. Facteur de profit     0,7 = 0, 1,0 = 15, 1,3 = 50, 1,5 = 70, 2,0 = 90, 2,5 et plus = 100
+     3. Marge de reussite     ton taux de reussite moins celui qui suffit avec ton
+                              gain moyen / perte moyenne, soit 1 / (1 + ratio)
+                              -10 pts = 0, 0 = 20, 5 = 50, 10 = 75, 15 = 90, 20 et plus = 100
+   Sur moins de 20 trades, la note de strategie est ramenee vers 50 en proportion
+   (8 trades : 40 % de l'ecart a 50) : quelques trades ne prouvent pas une strategie.
+   Reperes (TradeZella) : facteur de profit 1,3 solide, 1,5 fort, 2 exceptionnel ;
+   0,2 R par trade = rentable, 0,5 R = fort.
+
+   TA DISCIPLINE : sur TOUTES les journees de la plage.
+     4. Journees dans tes limites   100 x journees sans depassement / journees tradees
+     5. Regularite                  100 x (1 - ecart-type des journees / (2 x journee type))
+     6. Recul contre gains          profit net / recul max : 0 = 0, 1 = 40, 2 = 70, 3 et plus = 100
+     7. Respect des playbooks       100 x regles cochees / regles applicables
+     8. Controle du risque          100 - 100 x trades ou la perte a depasse le stop / trades avec stop
+   Un element impossible a calculer est exclu de la moyenne au lieu de compter zero. */
+var NOTE_ECHELLES = {
+  esperance: [[-0.3, 0], [0, 15], [0.2, 55], [0.35, 75], [0.5, 90], [0.7, 100]],
+  facteur:   [[0.7, 0], [1, 15], [1.3, 50], [1.5, 70], [2, 90], [2.5, 100]],
+  marge:     [[-10, 0], [0, 20], [5, 50], [10, 75], [15, 90], [20, 100]],
+  recul:     [[0, 0], [1, 40], [2, 70], [3, 100]]
+};
+var NOTE_TRADES_FIABLES = 20;   // en dessous, la note de strategie est ramenee vers 50
+var NOTE_MIN_TRADES_EN_R = 10;  // a partir de la, la strategie se mesure en R
+
+// interpolation lineaire entre des points [x, note] ranges par x croissant
+function surEchelle(x, points){
+  if (!(x > points[0][0])) return points[0][1];
+  for (var i = 1; i < points.length; i++) {
+    if (x <= points[i][0]) {
+      var a = points[i - 1], b = points[i];
+      return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]);
+    }
+  }
+  return points[points.length - 1][1];
+}
+function moyenneNotes(sous){
+  var dispo = sous.filter(function(x){ return x.note !== null; });
+  return dispo.length ? dispo.reduce(function(a, b){ return a + b.note; }, 0) / dispo.length : null;
+}
+
 function noteGlobale(trades, stats, reglages){
+  trades = trades || [];
   var s = stats || statsDeTrades(trades);
-  var sous = [];
-  var pousser = function(nom, note, detail){
-    sous.push({ nom: nom, note: note === null ? null : clamp(note, 0, 100), detail: detail });
+  var rg = reglages || {};
+  var signeNb = function(v, d){ return (v > 0 ? '+' : '') + fmtNombre(v, d); };
+  var pousser = function(liste, nom, note, detail){
+    liste.push({ nom: nom, note: note === null ? null : clamp(note, 0, 100), detail: detail });
   };
 
-  // 1. facteur de profit
-  if (s.facteurProfit === null) pousser('Facteur de profit', null, 'pas assez de trades');
-  else if (s.facteurProfit === Infinity) pousser('Facteur de profit', 100, 'aucune perte');
-  else pousser('Facteur de profit', 100 * (s.facteurProfit / 3), fmtNombre(s.facteurProfit, 2) + ' (3,00 = 100)');
+  // ===== TA STRATEGIE =====
+  var infra = joursEnInfraction(s, rg, trades);
+  var joursExclus = Object.keys(infra).sort();
+  var gardes = trades.filter(function(t){ return !infra[cleJour(t.fermeture)]; });
+  var exclus = trades.filter(function(t){ return infra[cleJour(t.fermeture)]; });
+  var avecR = gardes.filter(function(t){ return rDuTrade(t) !== null; });
+  var enR = avecR.length >= NOTE_MIN_TRADES_EN_R;
+  var esp = null, pf = null, taux = null, ratio = null, nbBase = 0;
+  if (enR) {
+    var rs = avecR.map(rDuTrade);
+    var g = rs.filter(function(r){ return r > 0; }), p = rs.filter(function(r){ return r < 0; });
+    var sg = g.reduce(function(a, b){ return a + b; }, 0), sp = -p.reduce(function(a, b){ return a + b; }, 0);
+    nbBase = rs.length;
+    esp = rs.reduce(function(a, b){ return a + b; }, 0) / rs.length;
+    pf = sp > 0 ? sg / sp : (sg > 0 ? Infinity : null);
+    taux = (g.length + p.length) ? g.length / (g.length + p.length) : null;
+    ratio = (g.length && p.length) ? (sg / g.length) / (sp / p.length) : null;
+  } else {
+    var sgd = statsDeTrades(gardes);
+    nbBase = sgd.nb;
+    esp = (sgd.moyenne !== null && sgd.moyennePerte) ? sgd.moyenne / sgd.moyennePerte : null;
+    pf = sgd.facteurProfit;
+    taux = sgd.tauxReussite;
+    ratio = sgd.ratioGainPerte;
+  }
+  var strat = [];
+  if (esp === null) pousser(strat, 'Espérance par trade', null, 'il faut au moins une perte pour la mesurer');
+  else pousser(strat, 'Espérance par trade', surEchelle(esp, NOTE_ECHELLES.esperance),
+    enR ? signeNb(esp, 2) + ' R par trade (0,2 R = rentable, 0,5 R = fort)'
+        : 'chaque trade rapporte ' + signeNb(esp, 2) + ' fois ta perte moyenne (0,2 = rentable, 0,5 = fort)');
+  if (pf === null) pousser(strat, 'Facteur de profit', null, 'pas assez de trades');
+  else if (pf === Infinity) pousser(strat, 'Facteur de profit', 100, 'aucune perte');
+  else pousser(strat, 'Facteur de profit', surEchelle(pf, NOTE_ECHELLES.facteur),
+    fmtNombre(pf, 2) + (enR ? ' en R' : '') + ' (1,3 solide, 1,5 fort, 2 exceptionnel)');
+  if (taux === null || !ratio) pousser(strat, 'Marge de réussite', null, 'il faut au moins un gain et une perte');
+  else {
+    var seuil = 1 / (1 + ratio), marge = (taux - seuil) * 100;
+    pousser(strat, 'Marge de réussite', surEchelle(marge, NOTE_ECHELLES.marge),
+      fmtNombre(taux * 100, 0) + ' % de réussite alors que ' + fmtNombre(seuil * 100, 0) + ' % suffisent avec tes gains ' +
+      fmtNombre(ratio, 2) + ' fois tes pertes : marge de ' + signeNb(marge, 0) + ' pts');
+  }
+  var brute = moyenneNotes(strat);
+  var poids = Math.min(1, nbBase / NOTE_TRADES_FIABLES);
+  var noteStrat = brute === null ? null : 50 + (brute - 50) * poids;
 
-  // 2. taux de reussite
-  if (s.tauxReussite === null) pousser('Taux de réussite', null, 'pas assez de trades');
-  else pousser('Taux de réussite', 100 * (s.tauxReussite / 0.60), fmtNombre(s.tauxReussite * 100, 1) + ' % (60 % = 100)');
+  // ===== TA DISCIPLINE =====
+  var disc = [];
+  var nbJ = s.nbJours;
+  var limites = rg.perteJourMax > 0 || rg.tradesJourMax > 0 || (rg.risqueMaxPct > 0 && rg.compte > 0);
+  if (!limites) pousser(disc, 'Journées dans tes limites', null, 'aucune limite dans Réglages');
+  else if (!nbJ) pousser(disc, 'Journées dans tes limites', null, 'aucune journée tradée');
+  else pousser(disc, 'Journées dans tes limites', 100 * (nbJ - joursExclus.length) / nbJ,
+    (nbJ - joursExclus.length) + ' journées sur ' + nbJ + ' sans dépasser ta perte max ni ton nombre de trades');
 
-  // 3. ratio gain moyen / perte moyenne
-  if (!s.ratioGainPerte) pousser('Gain moyen / perte moyenne', null, 'il faut au moins un gain et une perte');
-  else pousser('Gain moyen / perte moyenne', 100 * (s.ratioGainPerte / 2), fmtNombre(s.ratioGainPerte, 2) + ' (2,00 = 100)');
-
-  // 4. coherence du profit quotidien
   var nets = Object.keys(s.jours).map(function(c){ return s.jours[c].net; });
-  if (nets.length < 3) pousser('Coherence', null, 'il faut au moins 3 journées');
+  if (nets.length < 3) pousser(disc, 'Régularité', null, 'il faut au moins 3 journées');
   else {
     var et = ecartType(nets);
     var moyAbs = nets.reduce(function(a, b){ return a + Math.abs(b); }, 0) / nets.length;
-    var base = Math.max(moyAbs, 1);
-    pousser('Coherence', 100 * (1 - et / (2 * base)),
+    pousser(disc, 'Régularité', 100 * (1 - et / (2 * Math.max(moyAbs, 1))),
       'écart-type ' + fmtArgent(et, 0) + ' pour une journée type de ' + fmtArgent(moyAbs, 0));
   }
 
-  // 5. respect des playbooks
+  if (!s.nb) pousser(disc, 'Recul contre gains', null, 'aucun trade');
+  else if (s.net <= 0) pousser(disc, 'Recul contre gains', 0, 'profit net négatif ou nul');
+  else if (!(s.ddMax > 0)) pousser(disc, 'Recul contre gains', 100, 'aucun recul du capital');
+  else pousser(disc, 'Recul contre gains', surEchelle(s.net / s.ddMax, NOTE_ECHELLES.recul),
+    'profit net ' + fmtNombre(s.net / s.ddMax, 2) + ' fois ton plus gros recul (' + fmtArgent(s.ddMax, 0) + ') ; 3 fois = 100');
+
   var totalRegles = 0, cochees = 0, nbAvecPlaybook = 0;
-  (trades || []).forEach(function(t){
+  trades.forEach(function(t){
     if (!t.playbookRegles || !t.playbookRegles.total) return;
     nbAvecPlaybook++;
     totalRegles += t.playbookRegles.total;
     cochees += t.playbookRegles.cochees;
   });
-  if (!totalRegles) pousser('Respect des playbooks', null, 'aucun trade rattaché à une stratégie');
-  else pousser('Respect des playbooks', 100 * (cochees / totalRegles),
+  if (totalRegles) pousser(disc, 'Respect des playbooks', 100 * (cochees / totalRegles),
     cochees + ' règles cochées sur ' + totalRegles + ' (' + nbAvecPlaybook + ' trades)');
 
-  // 6. controle du risque
   var avecStop = 0, depasses = 0;
-  (trades || []).forEach(function(t){
-    var r = risqueDollars(t);
-    if (!r) return;
+  trades.forEach(function(t){
+    if (!risqueDollars(t)) return;
     avecStop++;
     if (stopDepasse(t)) depasses++;
   });
-  if (!avecStop) pousser('Controle du risque', null, 'aucun stop prévu renseigne');
-  else pousser('Controle du risque', 100 - 100 * (depasses / avecStop),
+  if (avecStop) pousser(disc, 'Contrôle du risque', 100 - 100 * (depasses / avecStop),
     depasses + ' dépassement(s) du stop sur ' + avecStop + ' trades');
+  var noteDisc = moyenneNotes(disc);
 
-  var dispo = sous.filter(function(x){ return x.note !== null; });
-  var total = dispo.length ? dispo.reduce(function(a, b){ return a + b.note; }, 0) / dispo.length : null;
-  return { total: total === null ? null : Math.round(total), sous: sous, nbNotes: dispo.length };
+  var deux = [noteStrat, noteDisc].filter(function(x){ return x !== null; });
+  var total = deux.length ? deux.reduce(function(a, b){ return a + b; }, 0) / deux.length : null;
+  var netExclus = exclus.reduce(function(a, t){ return a + (Number(t.net) || 0); }, 0);
+  return {
+    total: total === null ? null : Math.round(total),
+    strategie: { total: noteStrat === null ? null : Math.round(noteStrat), brute: brute === null ? null : Math.round(brute),
+                 sous: strat, enR: enR, nbTrades: nbBase, poids: poids,
+                 joursExclus: joursExclus, nbExclus: exclus.length, netExclus: netExclus },
+    discipline: { total: noteDisc === null ? null : Math.round(noteDisc), sous: disc },
+    sous: strat.concat(disc),
+    nbNotes: strat.concat(disc).filter(function(x){ return x.note !== null; }).length
+  };
 }
 
 /* ---------- regroupements pour les ecrans de statistiques ---------- */
@@ -2950,8 +3045,9 @@ function rendreBordR(br, nbTrades){
 }
 
 function blocNote(ng){
+  var couleurDe = function(n){ return n === null ? 'var(--texte3)' : (n >= 70 ? 'var(--vert)' : (n >= 45 ? 'var(--jaune)' : 'var(--rouge)')); };
   var total = ng.total;
-  var couleur = total === null ? 'var(--texte3)' : (total >= 70 ? 'var(--vert)' : (total >= 45 ? 'var(--jaune)' : 'var(--rouge)'));
+  var couleur = couleurDe(total);
   var rayon = 50, circ = 2 * Math.PI * rayon;
   var rempli = total === null ? 0 : circ * total / 100;
   var anneau =
@@ -2961,18 +3057,47 @@ function blocNote(ng){
     'stroke-linecap="round" stroke-dasharray="' + rempli.toFixed(1) + ' ' + circ.toFixed(1) + '"/></svg>' +
     '<div class="centre-txt" style="color:' + couleur + '">' + (total === null ? '--' : total) +
     '<small>' + (total === null ? 'PAS DE DONNÉES' : 'SUR 100') + '</small></div></div>';
-  var sous = '<div class="bloc-sous-notes">' + ng.sous.map(function(x){
-    var n = x.note;
-    var c = n === null ? 'var(--texte3)' : (n >= 70 ? 'var(--vert)' : (n >= 45 ? 'var(--jaune)' : 'var(--rouge)'));
-    return '<div class="barre-ligne" title="' + ech(x.detail) + '">' +
-      '<div class="barre-etq">' + ech(x.nom) + '</div>' +
-      '<div class="barre-piste"><div style="left:0;width:' + (n === null ? 0 : n).toFixed(1) + '%;background:' + c + '"></div></div>' +
-      '<div class="barre-val">' + (n === null ? '<span class="gris">n.d.</span>' : Math.round(n)) + '</div></div>';
-  }).join('') + '</div>';
+  var barresDe = function(sous){
+    return sous.map(function(x){
+      var n = x.note;
+      return '<div class="barre-ligne" title="' + ech(x.detail) + '">' +
+        '<div class="barre-etq">' + ech(x.nom) + '</div>' +
+        '<div class="barre-piste"><div style="left:0;width:' + (n === null ? 0 : n).toFixed(1) + '%;background:' + couleurDe(n) + '"></div></div>' +
+        '<div class="barre-val">' + (n === null ? '<span class="gris">n.d.</span>' : Math.round(n)) + '</div></div>';
+    }).join('');
+  };
+  var groupe = function(nom, n, sousTitre, sous){
+    return '<div class="note-groupe"><div class="note-titre"><span>' + nom + '</span>' +
+      '<b style="color:' + couleurDe(n) + '">' + (n === null ? 'n.d.' : n + '<small> /100</small>') + '</b></div>' +
+      (sousTitre ? '<div class="gris mini" style="margin:-2px 0 6px">' + sousTitre + '</div>' : '') + barresDe(sous) + '</div>';
+  };
+  var st = ng.strategie, di = ng.discipline;
+  var sousStrat = st.nbTrades ? 'mesurée ' + (st.enR ? 'en R' : 'en dollars') + ' sur ' + st.nbTrades + ' trade' + (st.nbTrades > 1 ? 's' : '') +
+    (st.joursExclus.length ? ', sans tes journées hors limites' : '') : '';
+  var blocs = '<div class="bloc-sous-notes">' +
+    groupe('Ta stratégie', st.total, sousStrat, st.sous) +
+    groupe('Ta discipline', di.total, 'sur toutes tes journées', di.sous) + '</div>';
+
+  var lignes = [];
+  if (st.brute !== null && st.poids < 1) {
+    lignes.push('<b>Ta stratégie fait ' + st.brute + '/100 sur ' + st.nbTrades + ' trade' + (st.nbTrades > 1 ? 's' : '') + '.</b> Tant que tu n\'as pas ' +
+      NOTE_TRADES_FIABLES + ' trades, la note est ramenée vers 50 en proportion : quelques trades ne prouvent pas encore une stratégie. ' +
+      'Elle rejoint sa vraie valeur à ' + NOTE_TRADES_FIABLES + ' trades.');
+  }
+  if (st.joursExclus.length) {
+    lignes.push('Journées hors limites, mises de côté pour la stratégie mais comptées dans la discipline : ' +
+      st.joursExclus.map(function(c){ return fmtDate(jourDepuisCle(c).getTime(), false); }).join(', ') +
+      ' (' + st.nbExclus + ' trades, ' + signe(st.netExclus, 0) + ').');
+  }
+  if (!st.enR) {
+    lignes.push('La stratégie passe en R dès que ' + NOTE_MIN_TRADES_EN_R + ' de ces trades ont un R écrit : c\'est la mesure la plus juste.');
+  }
   var detail = '<div class="petit gris" style="margin-top:8px">' +
+    lignes.map(function(l){ return '<div style="margin-bottom:4px">' + l + '</div>'; }).join('') +
     ng.sous.map(function(x){ return '<div>' + ech(x.nom) + ' : ' + ech(x.detail) + '</div>'; }).join('') +
-    '<div style="margin-top:6px">Moyenne des ' + ng.nbNotes + ' element(s) calculables. Les seuils exacts sont écrits en commentaire dans le code, section NOTE GLOBALE.</div></div>';
-  return '<div class="jauge-score">' + anneau + sous + '</div>' + detail;
+    '<div style="margin-top:6px">Note globale = moyenne de ta stratégie et de ta discipline. Repères des seuils : TradeZella. ' +
+    'Les seuils exacts sont écrits en commentaire dans le code, section NOTE GLOBALE.</div></div>';
+  return '<div class="jauge-score">' + anneau + blocs + '</div>' + detail;
 }
 
 function rendreAlertesRisque(s, trades){
@@ -5264,7 +5389,9 @@ function rendreComparaison(){
     { nom: 'Recul maximal', a: sA.ddMax, b: sB.ddMax, f: function(v){ return fmtArgent(-v); }, fd: argAbs, sens: -1 },
     { nom: 'Commissions', a: sA.commission, b: sB.commission, f: function(v){ return fmtArgent(-v); }, fd: argAbs, sens: -1 },
     { nom: 'Durée moyenne', a: sA.dureeMoyenne, b: sB.dureeMoyenne, f: fmtDuree, fd: function(v){ return fmtDuree(Math.abs(v)); }, sens: 0 },
-    { nom: 'Note globale sur 100', a: nA.total, b: nB.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 }
+    { nom: 'Note globale sur 100', a: nA.total, b: nB.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 },
+    { nom: 'Note de ta stratégie', a: nA.strategie.total, b: nB.strategie.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 },
+    { nom: 'Note de ta discipline', a: nA.discipline.total, b: nB.discipline.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 }
   ];
   var html = '<div class="grille g2" style="margin-bottom:14px">' +
     '<div class="carte"><h4>Période A</h4><div class="petit gris">' + fmtDate(jourDepuisCle(a1).getTime(), false) + ' au ' + fmtDate(jourDepuisCle(a2).getTime(), false) + '</div>' +
@@ -5608,6 +5735,8 @@ function construirePartage(o){
     u: o.pourcent ? '%' : '$',
     d: o.debut, f: o.fin,
     l: o.liste ? 1 : 0,
+    // limites du jour, pour que la note du rapport mette de cote les memes journees
+    lim: [arrondiFin((E.reglages.perteJourMax || 0) / div), E.reglages.tradesJourMax || 0],
     tr: liste.map(function(t){
       var x = {
         s: t.symbole, d: t.sens === 'long' ? 1 : 0, q: t.qte,
@@ -5767,7 +5896,7 @@ async function afficherRapport(p, o){
   UNITE_MONTANT = p.u === '%' ? '%' : '$';
   var trades = tradesDepuisPartage(p);
   var s = statsDeTrades(trades);
-  var ng = noteGlobale(trades, s, {});
+  var ng = noteGlobale(trades, s, p.lim ? { perteJourMax: p.lim[0], tradesJourMax: p.lim[1] } : {});
   var jours = Object.keys(s.jours).sort().map(function(c){ return s.jours[c]; });
   E.pointsCourbe = s.courbe;
   E.pointsJours = jours;

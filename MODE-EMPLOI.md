@@ -213,8 +213,19 @@ dans le journal, après confirmation.
 
 ## 6. Les autres écrans
 
-- **Tableau de bord** : les 4 chiffres, la note globale sur 100 avec ses 6 sous-notes,
-  la courbe de capital, le profit par jour, et les alertes de risque.
+- **Tableau de bord** : les 4 chiffres, la note sur 100, la courbe de capital, le profit par jour,
+  tes résultats en R et les alertes de risque.
+  La **note sur 100** est la moyenne de deux notes :
+  - **Ta stratégie** : espérance par trade, facteur de profit et marge de réussite (ton taux de
+    réussite contre celui qui suffit avec ton gain moyen et ta perte moyenne). Elle est mesurée
+    **sans les journées hors limites** (perte max du jour ou nombre de trades max de Réglages
+    dépassé) : ces trades-là ne sont pas ta stratégie, c'est la discipline qui les paie. Elle se
+    mesure en R dès que 10 de ces trades ont un R écrit. Sous 20 trades, elle est ramenée vers 50
+    en proportion, parce que quelques trades ne prouvent pas encore une stratégie.
+  - **Ta discipline** : journées dans tes limites, régularité des journées, recul du capital
+    contre tes gains, et le respect des playbooks et des stops quand tu les remplis.
+  Repères des seuils, pris chez TradeZella : facteur de profit 1,3 solide, 1,5 fort,
+  2 exceptionnel ; 0,2 R par trade rentable, 0,5 R fort.
   La plage de dates s'applique partout et vaut **tout l'historique** par défaut.
 - **Calendrier** : une case par jour, verte ou rouge. Le liseré rouge et le ⚠ veulent dire
   qu'une de tes limites de risque a été dépassée ce jour-là. Clic sur un jour pour le détail.
@@ -283,7 +294,7 @@ avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 207 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 236 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash
