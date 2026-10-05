@@ -30,7 +30,8 @@ const M = new Function(code + `
            rRealise, rPlanifie, risqueDollars, fmtArgent, multiplicateurDe,
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
-           analyseJournees, resultatDe, trancheDuree, trancheTaille };
+           analyseJournees, resultatDe, trancheDuree, trancheTaille,
+           rDuTrade, lireR, fmtR, bilanR };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -405,6 +406,57 @@ verifier('tranche de duree 59 s', M.trancheDuree(59), 'Moins de 1 min');
 verifier('tranche de duree 1 h pile', M.trancheDuree(3600), '1 h et plus');
 verifier('tranche de taille 4 contrats', M.trancheTaille(4), '4 à 5 contrats');
 verifier('tranche de taille 20 contrats', M.trancheTaille(20), '11 contrats et plus');
+
+titre('18. Le R ecrit a la main');
+verifier('lire "3"', M.lireR('3'), 3);
+verifier('lire "+3"', M.lireR('+3'), 3);
+verifier('lire "-1"', M.lireR('-1'), -1);
+verifier('lire "1,5" (virgule)', M.lireR('1,5'), 1.5);
+verifier('lire "2.5R"', M.lireR('2.5R'), 2.5);
+verifier('lire " -0,5 r " (espaces, petit r)', M.lireR(' -0,5 r '), -0.5);
+verifier('lire le moins typographique "−1"', M.lireR('−1'), -1);
+verifier('lire "0"', M.lireR('0'), 0);
+verifier('lire "-0" donne 0', Object.is(M.lireR('-0'), 0), true);
+verifier('case vide = pas de R', M.lireR(''), null);
+verifier('"1:3" refuse (on veut le resultat)', isNaN(M.lireR('1:3')), true);
+verifier('"abc" refuse', isNaN(M.lireR('abc')), true);
+verifier('afficher +3 R', M.fmtR(3), '+3 R');
+verifier('afficher 2,5 sans zero inutile', M.fmtR(2.5), '+2,5 R');
+verifier('afficher -1 R', M.fmtR(-1), '-1 R');
+verifier('afficher 0 R sans signe', M.fmtR(0), '0 R');
+verifier('afficher 1,25 R', M.fmtR(1.25), '+1,25 R');
+// le R ecrit a la main passe avant celui calcule depuis le stop
+const avecStop = { net: 100, brut: 100, prixEntree: 100, stopPrevu: 99, qte: 1, multiplicateur: 50 };   // risque 50 $ -> 2 R
+verifier('sans R a la main : R calcule depuis le stop', M.rDuTrade(avecStop), 2);
+verifier('avec R a la main : il passe devant', M.rDuTrade(Object.assign({ rManuel: 3 }, avecStop)), 3);
+verifier('R a la main de 0 (BE) compte bien', M.rDuTrade({ net: 5, rManuel: 0 }), 0);
+verifier('rManuel null : retombe sur le calcul', M.rDuTrade(Object.assign({}, avecStop, { rManuel: null })), 2);
+verifier('ni stop ni R : pas de R', M.rDuTrade({ net: 40 }), null);
+const tr = (j, h, r, net, cle) => ({ cle, net, brut: net, commission: 0, qte: 1, rManuel: r,
+  ouverture: new Date('2026-' + j + 'T' + h).getTime(), fermeture: new Date('2026-' + j + 'T' + h).getTime() + 60000 });
+const tR = [
+  tr('09-29', '10:00:00', 3, 300, 'r1'), tr('09-29', '11:00:00', -1, -100, 'r2'),
+  tr('09-30', '10:00:00', 0, 4, 'r3'), tr('09-30', '10:30:00', -1, -100, 'r4'),
+  tr('10-01', '10:00:00', 2.5, 250, 'r5'), tr('10-01', '11:00:00', null, 80, 'r6')   // r6 sans R
+];
+const bR = M.bilanR(tR);
+verifier('5 trades avec un R sur 6', bR.nb + '/' + bR.nbTrades, '5/6');
+verifier('total en R : 3 - 1 + 0 - 1 + 2,5', bR.total, 3.5);
+verifier('R moyen : 3,5 / 5', bR.moyenne, 0.7);
+verifier('gagnant moyen (3 + 2,5) / 2', bR.moyenneG, 2.75);
+verifier('perdant moyen -1', bR.moyenneP, -1);
+verifier('2 gagnants, 2 perdants, 1 BE', bR.nbG + '/' + bR.nbP + '/' + bR.nbBE, '2/2/1');
+verifier('taux de reussite en R : 2 sur 4 (le BE ne compte pas)', bR.tauxReussite, 0.5);
+verifier('recul max en R : de +3 a +1', bR.ddMax, 2);
+verifier('meilleur trade : r1 a +3', bR.meilleur.cle + bR.meilleur.r, 'r13');
+verifier('pire trade : -1', bR.pire.r, -1);
+verifier('par mois : septembre +1, octobre +2,5', bR.parMois.map(m => m.mois + '=' + m.total).join(' '), '2026-09=1 2026-10=2.5');
+verifier('par jour : le 30 sept. fait -1', bR.parJour['2026-09-30'].total, -1);
+verifier('courbe : finit a +3,5', bR.courbe[bR.courbe.length - 1].cumul, 3.5);
+verifier('aucun R : total 0, moyenne vide', M.bilanR([{ net: 10, fermeture: 1 }]).moyenne, null);
+const sR = M.statsDeTrades(tR);
+verifier('les stats generales comptent le R a la main : R moyen 0,7', sR.moyenneR, 0.7);
+verifier('et 5 trades avec un R', sR.nbAvecR, 5);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

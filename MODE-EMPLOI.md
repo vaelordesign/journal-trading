@@ -110,8 +110,16 @@ vraiment à quelque chose :
   le journal la refuse avec un message au lieu de la garder sans pouvoir la montrer.
   Dans les réglages de l'iPhone, Appareil photo → Formats → « Le plus compatible » règle ça
   une fois pour toutes.
+- **Ton résultat en R, à la main** : +3 si ta cible d'un 1:3 est touchée, -1 si stop, 0 si BE,
+  1,5 si tu sors avant. La virgule ou le point marchent, « 2R » aussi. Les boutons **-1** et **0**
+  le remplissent d'un clic. Le plus rapide : dans le **Journal quotidien**, carte Discipline du
+  jour, chaque trade a sa case R à côté de ses boutons D à A+, et elle s'enregistre toute seule.
+  Le journal additionne ensuite tes R partout : carte **Tes résultats en R** du Tableau de bord
+  (total, R moyen, gagnant moyen contre perdant moyen, courbe et total par mois), colonne R des
+  Trades, R du jour dans le Calendrier et le Journal quotidien, colonne R moyen des
+  Statistiques, et Comparaison. « 1:3 » est refusé : on écrit ce que le trade a donné.
 - **Stop prévu** et **cible prévue** : c'est ce qui permet de calculer ton risque en dollars,
-  ton R planifié et ton R obtenu. Sans ça, la colonne R reste vide.
+  ton R planifié et ton R obtenu. Si tu as écrit ton R à la main, c'est lui qui compte.
 - **Étiquettes** : les étiquettes ICT sont préréglées, tu ajoutes les tiennes.
 - **Stratégie** : choisis un playbook et coche les règles que tu as respectées.
 - **Note d'exécution de 1 à 5** : c'est une note sur *ta discipline*, pas sur le résultat
@@ -275,7 +283,7 @@ avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 169 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 207 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash

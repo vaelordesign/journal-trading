@@ -17,6 +17,8 @@ aucune donnée qui sort du navigateur.
 - **Calendrier** mensuel, vert ou rouge, avec les journées hors limites de risque.
 - **Détail d'un trade** : captures d'écran collées au Ctrl+V, stop et cible prévus,
   R planifié et R obtenu, étiquettes ICT, note d'exécution, notes libres.
+- **R écrit à la main** sur chaque trade (+3, -1, 0, 1,5), depuis le détail du trade ou le journal du
+  jour, et additionné partout : total et R moyen, courbe en R, R par mois, R du jour au calendrier.
 - **Tes journées** : le premier trade et ce qui suit (arrêt ou non, ce que rapporte
   la suite), les règles d'arrêt rejouées sur l'historique, le rang du trade dans la journée, le trade
   qui suit un gain ou une perte, le sommet de la journée contre la clôture.
