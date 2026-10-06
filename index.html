@@ -104,8 +104,10 @@ main{padding:14px;max-width:1500px;margin:0 auto}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:900px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.g2,.g3,.g4{grid-template-columns:minmax(0,1fr)}}
+.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1150px){.g5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.g3,.g4,.g5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.g2,.g3,.g4,.g5{grid-template-columns:minmax(0,1fr)}}
 
 button,.bouton{
   font-family:inherit;font-size:13px;
@@ -500,7 +502,7 @@ svg text{font-family:inherit}
   <!-- ============ TABLEAU DE BORD ============ -->
   <section class="ecran actif" id="ec-bord">
     <div id="bordAlertes"></div>
-    <div class="grille g4" style="margin-bottom:14px" id="bordChiffres"></div>
+    <div class="grille g5" style="margin-bottom:14px" id="bordChiffres"></div>
     <div class="grille g2">
       <div class="carte">
         <h3>Note globale <span class="petit gris">sur 100</span></h3>
@@ -2955,7 +2957,8 @@ function rendreBord(){
       s.facteurProfit !== null && s.facteurProfit >= 1 ? 'vert' : 'rouge') +
     chiffre('Profit moyen par trade', s.moyenne === null ? '--' : signe(s.moyenne),
       s.moyenneR === null ? 'écris le R de tes trades pour le voir ici' : 'R moyen ' + fmtR(s.moyenneR) + ' par trade',
-      cls(s.moyenne));
+      cls(s.moyenne)) +
+    tuileRDuMois();
 
   // ---- note globale ----
   var ng = noteGlobale(trades, s, E.reglages);
@@ -3015,6 +3018,27 @@ function rendreBord(){
   rendreAlertesRisque(s, trades);
 }
 
+// Les trades reels fermes pendant un mois du calendrier (mois de 0 a 11), toute plage confondue.
+function tradesDuMois(an, mois){
+  return tousLesTradesReels().filter(function(t){
+    var f = new Date(t.fermeture);
+    return f.getFullYear() === an && f.getMonth() === mois;
+  });
+}
+function nomDuMois(an, mois){ return MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an; }
+
+// Tuile du tableau de bord : le total des R du mois en cours, et celui du mois d'avant.
+// Toujours le vrai mois du calendrier, quelle que soit la plage choisie en haut.
+function tuileRDuMois(){
+  var auj = new Date(), an = auj.getFullYear(), m = auj.getMonth();
+  var avant = new Date(an, m - 1, 1);
+  var b = bilanR(tradesDuMois(an, m));
+  var bAvant = bilanR(tradesDuMois(avant.getFullYear(), avant.getMonth()));
+  var sous = b.nb ? MOIS_FR[m] + ', ' + b.nb + ' trade' + (b.nb > 1 ? 's' : '') + ' avec un R' : 'aucun R écrit en ' + MOIS_FR[m];
+  if (bAvant.nb) sous += ' ; ' + MOIS_FR[avant.getMonth()] + ' : ' + fmtR(bAvant.total);
+  return chiffre('Total R du mois', b.nb ? fmtR(b.total) : '--', sous, b.nb ? cls(b.total) : '');
+}
+
 function rendreBordR(br, nbTrades){
   var manquants = nbTrades - br.nb;
   $('#bordRInfo').textContent = br.nb ? '- ' + br.nb + ' trade' + (br.nb > 1 ? 's' : '') + ' sur ' + nbTrades + ' ont un R' : '';
@@ -3037,9 +3061,9 @@ function rendreBordR(br, nbTrades){
       chiffre('Recul max en R', fmtR(-br.ddMax), 'meilleur trade ' + fmtR(br.meilleur.r) + ', pire ' + fmtR(br.pire.r), br.ddMax > 0 ? 'rouge' : '') +
     '</div>' +
     svgCourbe(br.courbe, 'courbeR', { dec: 1, src: 'courbeR' }) +
-    (br.parMois.length > 1 ? '<h4 style="margin-top:12px">Par mois</h4>' + barres(br.parMois.map(function(m){
+    (br.parMois.length ? '<h4 style="margin-top:12px">Total R par mois</h4>' + barres(br.parMois.map(function(m){
       return { etq: nomMois(m.mois), val: m.total, extra: m.nb + ' tr.' };
-    }), { fmt: function(v){ return fmtR(v, 1); } }) : '') +
+    }), { fmt: function(v){ return fmtR(v); } }) : '') +
     (manquants > 0 ? '<div class="petit gris" style="margin-top:8px">' + manquants + ' trade' + (manquants > 1 ? 's' : '') +
       ' de la plage n\'' + (manquants > 1 ? 'ont' : 'a') + ' pas encore de R : ' + (manquants > 1 ? 'ils ne comptent' : 'il ne compte') + ' pas ici.</div>' : '');
 }
@@ -3203,9 +3227,11 @@ function rendreCalendrier(){
   $('#calNoms').innerHTML = nomsJoursHtml();
   $('#calGrille').innerHTML = grilleCalendrierHtml(sMois, an, mois, infra, E.jours);
 
+  var bMois = bilanR(duMois);
   $('#calResume').innerHTML = sMois.nb
     ? '<span class="' + cls(sMois.net) + ' gras">' + signe(sMois.net) + '</span> sur ' + sMois.nb + ' trades, ' +
-      sMois.nbJours + ' journée(s)'
+      sMois.nbJours + ' journée(s)' +
+      (bMois.nb ? ' &middot; <span class="' + cls(bMois.total) + ' gras">' + fmtR(bMois.total) + '</span>' : '')
     : 'aucun trade ce mois-ci';
 
   // stats du mois
@@ -3214,13 +3240,16 @@ function rendreCalendrier(){
     var dd = jourDepuisCle(c);
     var lundi = new Date(dd); lundi.setDate(dd.getDate() - ((dd.getDay() + 6) % 7));
     var k = cleJour(lundi.getTime());
-    if (!semaines[k]) semaines[k] = { net: 0, nb: 0 };
+    if (!semaines[k]) semaines[k] = { net: 0, nb: 0, trades: [] };
     semaines[k].net += sMois.jours[c].net;
     semaines[k].nb += sMois.jours[c].nb;
+    semaines[k].trades = semaines[k].trades.concat(sMois.jours[c].trades);
   });
   var htmlSem = Object.keys(semaines).sort().map(function(k){
+    var bs = bilanR(semaines[k].trades);
     return '<div class="barre-ligne"><div class="barre-etq">Semaine du ' + fmtDate(jourDepuisCle(k).getTime(), false) + '</div>' +
       '<div class="barre-val ' + cls(semaines[k].net) + '">' + signe(semaines[k].net, 0) + '</div>' +
+      (bMois.nb ? '<div class="barre-val ' + (bs.nb ? cls(bs.total) : 'gris') + '">' + (bs.nb ? fmtR(bs.total) : '--') + '</div>' : '') +
       '<div class="barre-val gris">' + semaines[k].nb + ' trades</div></div>';
   }).join('');
   $('#calStats').innerHTML = sMois.nb ? (
@@ -3230,7 +3259,17 @@ function rendreCalendrier(){
       chiffre('Journées vertes', sMois.nbJoursG + ' / ' + sMois.nbJours, sMois.nbJoursP + ' journée(s) rouge(s)') +
       chiffre('Meilleure journée', sMois.meilleurJour ? fmtArgent(sMois.meilleurJour.net) : '--',
         sMois.pireJour ? 'pire : ' + fmtArgent(sMois.pireJour.net) : '') +
-    '</div>' + htmlSem
+    '</div>' +
+    (bMois.nb ?
+      '<div class="grille g4" style="margin-bottom:12px">' +
+        chiffre('Total R du mois', fmtR(bMois.total), bMois.nb + ' trade' + (bMois.nb > 1 ? 's' : '') + ' sur ' + sMois.nb + ' avec un R', cls(bMois.total)) +
+        chiffre('R moyen par trade', fmtR(bMois.moyenne), bMois.nbG + ' gagnant(s), ' + bMois.nbP + ' perdant(s), ' + bMois.nbBE + ' BE', cls(bMois.moyenne)) +
+        chiffre('Gagnant moyen / perdant moyen', '<span class="vert">' + fmtR(bMois.moyenneG, 1) + '</span> <span class="gris" style="font-size:15px">/</span> <span class="rouge">' +
+          fmtR(bMois.moyenneP, 1) + '</span>', bMois.tauxReussite === null ? '' : fmtNombre(bMois.tauxReussite * 100, 0) + ' % de réussite en R') +
+        chiffre('Meilleur trade en R', fmtR(bMois.meilleur.r), 'pire : ' + fmtR(bMois.pire.r)) +
+      '</div>'
+    : '<div class="petit gris" style="margin-bottom:12px">Aucun R écrit ce mois-ci : tape-le dans le Journal quotidien pour voir ton total en R ici.</div>') +
+    htmlSem
   ) : '<div class="petit gris">Rien à afficher pour ce mois.</div>';
 }
 
@@ -4413,6 +4452,8 @@ function peindreResultatJournee(){
   var s = statsDeTrades(duJour);
   var infra = joursEnInfraction(s, E.reglages, duJour);
   var br = bilanR(duJour);
+  var jMois = jourDepuisCle(cle);
+  var bMois = bilanR(tradesDuMois(jMois.getFullYear(), jMois.getMonth()));
 
   $('#journalResultat').innerHTML =
     '<h3>' + fmtJourLong(cle) + '</h3>' +
@@ -4423,6 +4464,8 @@ function peindreResultatJournee(){
     '</div>' +
     (br.nb ? '<div style="margin-top:10px">En R : <b class="' + cls(br.total) + '">' + fmtR(br.total) + '</b> ' +
       '<span class="petit gris">(' + br.nb + ' trade' + (br.nb > 1 ? 's' : '') + ' sur ' + duJour.length + ' avec un R)</span></div>' : '') +
+    (bMois.nb ? '<div style="margin-top:' + (br.nb ? '4' : '10') + 'px">Total R du mois (' + MOIS_FR[jMois.getMonth()] + ') : <b class="' + cls(bMois.total) + '">' +
+      fmtR(bMois.total) + '</b> <span class="petit gris">(' + bMois.nb + ' trade' + (bMois.nb > 1 ? 's' : '') + ')</span></div>' : '') +
     (infra[cle] ? '<div class="avis rougef" style="margin-top:12px"><b>Limites dépassées :</b> ' + ech(infra[cle].join(' ; ')) + '</div>' : '');
 
   $('#journalTrades').innerHTML = duJour.length
@@ -6007,9 +6050,11 @@ async function afficherRapport(p, o){
     var sm = statsDeTrades(duMois);
     $('#rapCalTitre').textContent = MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an;
     $('#rapCalGrille').innerHTML = grilleCalendrierHtml(sm, an, mois, null, null);
+    var bm = bilanR(duMois);
     $('#rapCalResume').innerHTML = sm.nb
       ? '<span class="' + cls(sm.net) + ' gras">' + signe(sm.net) + '</span> sur ' + sm.nb + ' trades, ' +
-        sm.nbJoursG + ' journée(s) verte(s) et ' + sm.nbJoursP + ' rouge(s)'
+        sm.nbJoursG + ' journée(s) verte(s) et ' + sm.nbJoursP + ' rouge(s)' +
+        (bm.nb ? ' &middot; <span class="' + cls(bm.total) + ' gras">' + fmtR(bm.total) + '</span>' : '')
       : 'aucun trade ce mois-ci';
     $('#rapCalPrec').disabled = courant <= borneMin;
     $('#rapCalSuiv').disabled = courant >= borneMax;
