@@ -31,7 +31,7 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -512,6 +512,31 @@ const nGain = M.noteGlobale(tGain, M.statsDeTrades(tGain), limN);
 verifier('aucune perte : facteur de profit 100', sousDe(nGain.strategie, 'Facteur de profit'), 100);
 verifier('aucune perte : esperance non calculable', sousDe(nGain.strategie, 'Espérance par trade'), null);
 verifier('aucun trade : pas de note', M.noteGlobale([], M.statsDeTrades([]), limN).total, null);
+
+titre('20. Le biais du matin contre la realite');
+const pjB = net => ({ net, nb: 1, trades: [] });
+const ab = M.analyseBiais([
+  { date: '2026-10-01', biaisSens: 'haussier', biaisJuste: 'juste' },
+  { date: '2026-10-02', biaisSens: 'haussier', biaisJuste: 'juste' },
+  { date: '2026-10-05', biaisSens: 'baissier', biaisJuste: 'faux' },
+  { date: '2026-10-06', biaisSens: 'neutre', biaisJuste: 'partiel' },
+  { date: '2026-10-07', biaisSens: 'baissier', biaisJuste: 'juste' },     // notee mais pas tradee
+  { date: '2026-10-08', biaisSens: 'haussier' },                          // biais choisi, justesse pas notee
+  { date: '2026-10-09', biais: 'ancien texte' }                           // vieille journee
+], { '2026-10-01': pjB(300), '2026-10-02': pjB(100), '2026-10-05': pjB(-400), '2026-10-06': pjB(-50), '2026-10-08': pjB(80) });
+verifier('5 journees ou la justesse est notee', ab.nbNotes, 5);
+verifier('juste 3 fois (meme la journee pas tradee)', ab.juste, 3);
+verifier('taux de biais juste 3 / 5', ab.taux, 0.6);
+const parJ = cle => ab.parJustesse.filter(x => x.cle === cle)[0];
+const parS = cle => ab.parSens.filter(x => x.cle === cle)[0];
+verifier('biais juste : 2 journees tradees, +200 par jour', parJ('juste').nbJours + '/' + parJ('juste').moyenneJour, '2/200');
+verifier('biais faux : -400', parJ('faux').moyenneJour, -400);
+verifier('en partie : -50', parJ('partiel').total, -50);
+verifier('biais haussier : 3 journees tradees (le 8 compte)', parS('haussier').nbJours, 3);
+verifier('biais haussier : total +480', parS('haussier').total, 480);
+verifier('biais haussier : 3 journees vertes', parS('haussier').joursVerts, 3);
+verifier('pas de biais : 1 journee a -50', parS('neutre').total, -50);
+verifier('rien de note : pas de taux', M.analyseBiais([{ date: '2026-10-01' }], {}).taux, null);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

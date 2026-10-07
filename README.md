@@ -35,7 +35,9 @@ aucune donnée qui sort du navigateur.
   et montre la courbe de capital sans les jours indisciplinés.
 - **Qualité du setup** de D à A+ sur chaque trade, notée depuis le journal du jour, et ce qu'aurait donné le compte avec
   les seuls A+ et A.
-- **Journal quotidien**, **carnet libre** avec gabarits, **comparaison de périodes**,
+- **Journal quotidien** : préparation du matin en cases séparées (biais, nuit, liquidité, niveaux,
+  annonces, invalidation, scénarios A et B, plan de risque), résumé de la journée et justesse du biais.
+- **Carnet libre** avec gabarits, **comparaison de périodes**,
   **journal de backtest** séparé des trades réels.
 - **Export / import JSON** complet, captures comprises. C'est la seule sauvegarde.
 

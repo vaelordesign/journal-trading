@@ -388,6 +388,14 @@ svg text{font-family:inherit}
 .saisie-r input.r-neg{border-color:var(--rouge);color:var(--rouge-clair)}
 .saisie-r input.r-faux{border-color:var(--rouge);border-style:dashed}
 .cal-case .jr{font-size:10px;font-variant-numeric:tabular-nums;color:var(--texte2)}
+.ligne-choix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px}
+.choix-boutons{display:flex;gap:4px;flex-wrap:wrap}
+.choix-boutons button{padding:5px 11px;font-size:12px}
+.choix-boutons button.on{background:var(--accent-fond);border-color:var(--accent);color:#fff}
+.choix-boutons button.on[data-v="haussier"],.choix-boutons button.on[data-v="juste"]{background:var(--vert);border-color:var(--vert);color:#04211f}
+.choix-boutons button.on[data-v="baissier"],.choix-boutons button.on[data-v="faux"]{background:var(--rouge);border-color:var(--rouge);color:#fff}
+.choix-boutons button.on[data-v="neutre"],.choix-boutons button.on[data-v="partiel"]{background:var(--jaune);border-color:var(--jaune);color:#2a2000}
+#carteMatin textarea{resize:vertical}
 .etq-choix.erreur.on{background:var(--rouge-fond);border-color:var(--rouge);color:var(--rouge-clair)}
 .faits{display:flex;flex-direction:column;gap:5px;font-size:12px}
 .faits div{display:flex;gap:7px;align-items:flex-start}
@@ -644,17 +652,18 @@ svg text{font-family:inherit}
       <button class="pt" id="btnJournalAuj">Aujourd'hui</button>
     </div>
     <div class="carte" id="carteDiscipline"></div>
+    <div class="carte" id="carteMatin"></div>
     <div class="grille g2">
       <div class="carte">
-        <h3>Biais du matin <span class="petit gris">avant la séance</span></h3>
-        <textarea id="journalBiais" rows="9" placeholder="Biais des unités supérieures (H4, H1) : haussier ou baissier, pourquoi.
-Liquidité visée : quel sommet ou quel creux le prix va chercher.
-Niveaux clés : FVG, order blocks, sommets et creux de la veille.
-Killzone et annonces du jour : à quelle heure je trade, ce que j'évite.
-Perte max du jour et taille de position.
-Scénario A, scénario B."></textarea>
-        <h3 style="margin-top:14px">Bilan du soir <span class="petit gris">après la séance</span></h3>
-        <textarea id="journalBilan" rows="9" placeholder="Ce qui s'est passé, ce que j'ai bien fait, ce que je corrige demain..."></textarea>
+        <h3>Résumé de la journée de trade <span class="petit gris">après la séance</span></h3>
+        <div class="ligne-choix">
+          <span>Mon biais du matin était</span>
+          <div class="choix-boutons" id="jmBiaisJuste">
+            <button data-v="juste">Juste</button><button data-v="partiel">En partie</button><button data-v="faux">Faux</button>
+          </div>
+        </div>
+        <div class="gris mini" id="jmStatBiais" style="margin:-4px 0 8px"></div>
+        <textarea id="journalBilan" rows="9" placeholder="Comment s'est passée ta séance : ce que le marché a fait par rapport à ton plan, tes trades et pourquoi tu les as pris, ce que tu as bien fait, ce que tu corriges demain."></textarea>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="primaire" id="btnJournalEnr">Enregistrer</button>
           <span class="petit gris" id="journalEtat"></span>
@@ -2279,6 +2288,32 @@ function analyseJournees(trades, o){
   return res;
 }
 
+/* ---------- LE BIAIS DU MATIN CONTRE LA REALITE ----------
+   Chaque matin, Julien choisit un biais (biaisSens : haussier, baissier, neutre) ;
+   le soir, il dit s'il etait juste (biaisJuste : juste, partiel, faux).
+   Le compte de justesse porte sur toutes les journees notees, tradees ou non.
+   Les profits ne portent que sur les journees tradees (parJour = statsDeTrades(...).jours). */
+var JUSTESSES_BIAIS = [{ cle: 'juste', nom: 'Biais juste' }, { cle: 'partiel', nom: 'Juste en partie' }, { cle: 'faux', nom: 'Biais faux' }];
+var SENS_BIAIS = [{ cle: 'haussier', nom: 'Biais haussier' }, { cle: 'baissier', nom: 'Biais baissier' }, { cle: 'neutre', nom: 'Pas de biais' }];
+function analyseBiais(jours, parJour){
+  parJour = parJour || {};
+  var liste = (jours || []).filter(function(j){ return j && j.date; });
+  var res = { nbNotes: 0, juste: 0, partiel: 0, faux: 0, taux: null, parJustesse: [], parSens: [] };
+  liste.forEach(function(j){
+    if (j.biaisJuste === 'juste' || j.biaisJuste === 'partiel' || j.biaisJuste === 'faux') { res[j.biaisJuste]++; res.nbNotes++; }
+  });
+  res.taux = res.nbNotes ? res.juste / res.nbNotes : null;
+  var resume = function(champ, x){
+    var nets = liste.filter(function(j){ return j[champ] === x.cle && parJour[j.date] && parJour[j.date].nb; })
+      .map(function(j){ return parJour[j.date].net; });
+    return { cle: x.cle, nom: x.nom, nbJours: nets.length, total: nets.reduce(function(a, b){ return a + b; }, 0),
+             moyenneJour: moyenneDe(nets), joursVerts: nets.filter(function(n){ return n > 0; }).length };
+  };
+  res.parJustesse = JUSTESSES_BIAIS.map(function(x){ return resume('biaisJuste', x); });
+  res.parSens = SENS_BIAIS.map(function(x){ return resume('biaisSens', x); });
+  return res;
+}
+
 /* ==================== FIN MOTEUR ==================== */
 /* =======================================================================
    BASE DE DONNEES (IndexedDB)
@@ -2410,6 +2445,64 @@ var E = {
 
 var CHAMPS_ANNOTATION = ['stopPrevu', 'ciblePrevue', 'notes', 'tags', 'note',
                          'playbookId', 'regles', 'nbImages', 'favori', 'qualite', 'rManuel'];
+
+/* ---------------------------------------------------------------
+   PREPARATION DU MATIN (ecran Journal quotidien)
+   Une case par sujet plutot qu'une seule grande zone de texte. Tout est range
+   dans l'enregistrement du jour (magasin 'jours'), a cote du resume de la
+   journee ('bilan'). 'biais' est l'ancien champ unique du matin : un vieux
+   texte reapparait donc dans la case « Pourquoi ce biais ».
+   --------------------------------------------------------------- */
+var NOMS_BIAIS = { haussier: 'haussier', baissier: 'baissier', neutre: 'neutre, pas de biais' };
+var NOMS_JUSTESSE = { juste: 'juste', partiel: 'juste en partie', faux: 'faux' };
+var CHAMPS_MATIN = [
+  { k: 'biais', titre: 'Pourquoi ce biais', lignes: 3,
+    aide: 'Daily, H4, H1 : la structure, le dernier déplacement, le prix en premium ou en discount.' },
+  { k: 'nuit', titre: 'Ce que le prix a fait cette nuit', lignes: 3,
+    aide: 'Asie et Londres : le range, quel côté a été balayé, où est le prix par rapport à l\'ouverture de minuit.' },
+  { k: 'liquidite', titre: 'La liquidité visée', lignes: 3,
+    aide: 'Le sommet ou le creux que le prix va chercher : haut ou bas de la veille, equal highs, haut de Londres...' },
+  { k: 'niveaux', titre: 'Mes niveaux clés', lignes: 3,
+    aide: 'FVG, order blocks, sommets et creux de la veille, ouverture de minuit et de 9 h 30.' },
+  { k: 'annonces', titre: 'Les annonces du jour', lignes: 3,
+    aide: '8 h 30 CPI : pas de trade de 8 h 25 à 8 h 45. Rien aujourd\'hui ? Écris « rien », c\'est aussi une info.' },
+  { k: 'invalidation', titre: 'Ce qui annule mon biais', lignes: 3,
+    aide: 'Le niveau ou l\'événement qui prouve que je me trompe : clôture de 15 min sous tel creux, déplacement dans l\'autre sens...' },
+  { k: 'scenarioA', titre: 'Scénario A : avec mon biais', lignes: 3,
+    aide: 'Si le prix balaie tel creux puis casse la structure, j\'entre sur le FVG, stop sous le creux, cible tel sommet.' },
+  { k: 'scenarioB', titre: 'Scénario B : si je me trompe', lignes: 3,
+    aide: 'Ce que je fais si le prix part dans l\'autre sens : je ne trade pas, ou je prends l\'inverse à telle condition.' }
+];
+var CHAMPS_RISQUE = [
+  { k: 'taille', titre: 'Contrats', aide: 'ex. 2 MNQ' },
+  { k: 'risqueTrade', titre: 'Risque par trade', aide: 'ex. 100 $ ou 1 R' },
+  { k: 'stopJour', titre: 'J\'arrête la journée à', aide: 'ex. -500 $ ou 2 pertes' },
+  { k: 'heures', titre: 'Mes heures aujourd\'hui', aide: 'ex. 9 h 30 à 11 h' }
+];
+
+// vrai si quelque chose est ecrit ou choisi dans le matin ou le resume de la journee
+function journalEcrit(j){
+  if (!j) return false;
+  if (j.biaisSens || j.biaisJuste || (j.bilan || '').trim()) return true;
+  return CHAMPS_MATIN.concat(CHAMPS_RISQUE).some(function(c){ return (j[c.k] || '').trim(); });
+}
+// tout le plan du matin en un texte lisible (fenetre d'un jour, lien de partage, liste)
+function texteMatin(j){
+  var l = [];
+  if (!j) return '';
+  if (j.biaisSens) l.push('Biais : ' + NOMS_BIAIS[j.biaisSens]);
+  CHAMPS_MATIN.forEach(function(c){
+    var v = (j[c.k] || '').trim();
+    if (v) l.push(c.titre + ' : ' + v);
+  });
+  var r = CHAMPS_RISQUE.filter(function(c){ return (j[c.k] || '').trim(); }).map(function(c){ return c.titre + ' ' + j[c.k].trim(); });
+  if (r.length) l.push('Risque : ' + r.join(', '));
+  return l.join('\n');
+}
+function texteResume(j){
+  if (!j) return '';
+  return ((j.biaisJuste ? 'Biais du matin ' + NOMS_JUSTESSE[j.biaisJuste] + '.\n' : '') + (j.bilan || '')).trim();
+}
 
 // bloc photos de l'ecran Journal quotidien, pour que Ctrl+V sache ou deposer
 var photosJournal = null;
@@ -3193,7 +3286,7 @@ function grilleCalendrierHtml(sMois, an, mois, infra, notes){
     var cle = an + '-' + String(mois + 1).padStart(2, '0') + '-' + String(j).padStart(2, '0');
     var jour = sMois.jours[cle];
     var note = notes[cle];
-    var aNote = note && ((note.biais && note.biais.trim()) || (note.bilan && note.bilan.trim()));
+    var aNote = journalEcrit(note);
     var c = 'cal-case actif';
     if (jour) c += jour.net > 0 ? ' g' : (jour.net < 0 ? ' p' : '');
     if (infra[cle]) c += ' enfreint';
@@ -3287,10 +3380,10 @@ function ouvrirJour(cle){
     '</div>' +
     (tous.length ? tableauTrades(tous, true) : '<div class="vide">Aucun trade ce jour-la.</div>') +
     '<div class="grille g2" style="margin-top:14px">' +
-      '<div><h4>Biais du matin</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
-        (note.biais ? ech(note.biais) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
-      '<div><h4>Bilan du soir</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
-        (note.bilan ? ech(note.bilan) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
+      '<div><h4>Préparation du matin</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
+        (texteMatin(note) ? ech(texteMatin(note)) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
+      '<div><h4>Résumé de la journée de trade</h4><div class="carte serre" style="white-space:pre-wrap;min-height:70px">' +
+        (texteResume(note) ? ech(texteResume(note)) : '<span class="gris">rien d\'écrit</span>') + '</div></div>' +
     '</div>' +
     (jourARempliDiscipline(note) ?
       '<h4 style="margin-top:14px">Discipline</h4><div class="carte serre petit">' +
@@ -4261,6 +4354,37 @@ function rendreStatsJournees(trades){
   }
   html += '</div>';
 
+  // ---- le biais du matin contre la realite ----
+  var joursPlage = Object.keys(E.jours).filter(function(c){ return dansPlage(jourDepuisCle(c).getTime()); })
+    .map(function(c){ return E.jours[c]; });
+  var ab = analyseBiais(joursPlage, statsDeTrades(trades).jours);
+  var lignesBiais = ab.parJustesse.concat(ab.parSens).filter(function(x){ return x.nbJours; });
+  html += '<div class="carte"><h3>Ton biais du matin</h3>';
+  if (!ab.nbNotes && !lignesBiais.length) {
+    html += '<div class="petit gris">Pas encore de données. Chaque matin, choisis ton biais (haussier, baissier ou neutre) dans la ' +
+      '<b>Préparation du matin</b> du Journal quotidien. Le soir, dis s\'il était juste dans le <b>Résumé de la journée</b>. ' +
+      'Cette carte te dira combien de fois ton biais est juste, et ce que tu gagnes ou perds les jours où il est faux.</div>';
+  } else {
+    var jF = ab.parJustesse[2], jJ = ab.parJustesse[0];
+    html += '<div class="verdict" style="margin-bottom:10px">' +
+      (ab.nbNotes ? 'Ton biais a été juste <b>' + ab.juste + ' fois sur ' + ab.nbNotes + '</b> (' + fmtNombre(ab.taux * 100, 0) + ' %)' +
+        (ab.partiel ? ', et ' + ab.partiel + ' fois en partie' : '') + '.' : '') +
+      (jF.nbJours && jJ.nbJours ? ' Les jours où il est faux, tu fais <b class="' + cls(jF.moyenneJour) + '">' + signe(jF.moyenneJour, 0) +
+        '</b> par jour, contre <b class="' + cls(jJ.moyenneJour) + '">' + signe(jJ.moyenneJour, 0) + '</b> quand il est juste.' +
+        (jF.moyenneJour < 0 ? ' Quand le prix casse ce qui annule ton biais, arrêter la séance te protège.' : '') : '') +
+      '</div>' +
+      (lignesBiais.length ? '<div class="tableau-boite"><table><thead><tr><th>Journées où</th><th class="num">Journées tradées</th>' +
+        '<th class="num">Profit moyen par jour</th><th class="num">Journées vertes</th><th class="num">Total</th></tr></thead><tbody>' +
+        lignesBiais.map(function(x){
+          return '<tr><td>' + x.nom + '</td><td class="num">' + x.nbJours + '</td>' +
+            '<td class="num gras ' + cls(x.moyenneJour) + '">' + moy(x.moyenneJour) + '</td>' +
+            '<td class="num">' + x.joursVerts + ' / ' + x.nbJours + ' <span class="gris">(' + pct(x.joursVerts, x.nbJours) + ')</span></td>' +
+            '<td class="num ' + cls(x.total) + '">' + signe(x.total, 0) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '') +
+      '<div class="petit gris" style="margin-top:8px">Le biais se choisit le matin dans le Journal quotidien, et sa justesse se note le soir dans le Résumé de la journée.</div>';
+  }
+  html += '</div>';
+
   $('#statsJournees').innerHTML = html;
   brancherStatsJournees();
 }
@@ -4443,6 +4567,43 @@ function rendreRegles(){
 /* =======================================================================
    ECRAN 9 : JOURNAL QUOTIDIEN
    ======================================================================= */
+// La carte Preparation du matin : construite une fois au demarrage, remplie par rendreJournal.
+function construireCarteMatin(){
+  var boite = function(c){
+    return '<label class="champ"><span>' + c.titre + '</span><textarea id="jm-' + c.k + '" rows="' + c.lignes +
+      '" placeholder="' + ech(c.aide) + '"></textarea></label>';
+  };
+  $('#carteMatin').innerHTML =
+    '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px">' +
+      '<h3 style="margin:0">Préparation du matin</h3>' +
+      '<span class="petit gris">avant la séance, tout s\'enregistre tout seul</span>' +
+      '<span class="petit gris" id="matinEtat" style="margin-left:auto"></span>' +
+    '</div>' +
+    '<div class="ligne-choix"><span>Mon biais du jour</span><div class="choix-boutons" id="jmBiaisSens">' +
+      '<button data-v="haussier">&#9650; Haussier</button><button data-v="baissier">&#9660; Baissier</button>' +
+      '<button data-v="neutre">Neutre, pas de biais</button></div></div>' +
+    '<div class="grille g2">' + CHAMPS_MATIN.map(boite).join('') + '</div>' +
+    '<h4 style="margin-top:2px">Mon plan de risque du jour</h4>' +
+    '<div class="grille g4">' + CHAMPS_RISQUE.map(function(c){
+      return '<label class="champ"><span>' + c.titre + '</span><input id="jm-' + c.k + '" autocomplete="off" placeholder="' + ech(c.aide) + '"></label>';
+    }).join('') + '</div>' +
+    '<div class="gris mini">Ton état avant la séance (sommeil, énergie, calme) et l\'objectif que tu as écrit hier sont dans la carte Discipline du jour, juste au-dessus.</div>';
+}
+// boutons a choix unique (biais du jour, biais juste) : la valeur vit dans data-v du conteneur
+function peindreChoix(boite, v){
+  if (!boite) return;
+  boite.dataset.v = v || '';
+  $$('button', boite).forEach(function(b){ b.classList.toggle('on', !!v && b.dataset.v === v); });
+}
+// sous les boutons « Mon biais du matin était » : le compte de toutes les journees notees
+function majStatBiais(){
+  var ab = analyseBiais(Object.keys(E.jours).map(function(c){ return E.jours[c]; }), {});
+  $('#jmStatBiais').innerHTML = ab.nbNotes
+    ? 'Ton biais a été juste <b>' + ab.juste + ' fois sur ' + ab.nbNotes + '</b>' + (ab.partiel ? ' (et ' + ab.partiel + ' fois en partie)' : '') +
+      '. Le détail, avec ce que tu gagnes quand il est faux, est dans l\'écran Tes journées.'
+    : 'Note-le chaque soir : l\'écran Tes journées te dira combien de fois ton biais est juste, et ce que tu fais les jours où il est faux.';
+}
+
 // Le resultat du jour et la liste de ses trades. Repeint aussi tout seul quand un R
 // est tape dans la carte Discipline du jour. Renvoie les stats du jour.
 function peindreResultatJournee(){
@@ -4483,10 +4644,20 @@ function rendreJournal(){
   viderSauvegardeJournal();
   var cle = E.journalDate;
   $('#journalDate').value = cle;
-  var note = E.jours[cle] || { date: cle, biais: '', bilan: '' };
-  $('#journalBiais').value = note.biais || '';
+  var note = E.jours[cle] || { date: cle };
+  CHAMPS_MATIN.concat(CHAMPS_RISQUE).forEach(function(c){ $('#jm-' + c.k).value = note[c.k] || ''; });
+  peindreChoix($('#jmBiaisSens'), note.biaisSens);
+  peindreChoix($('#jmBiaisJuste'), note.biaisJuste);
+  // les exemples du plan de risque reprennent les limites de Reglages quand il y en a
+  var rg = E.reglages;
+  $('#jm-stopJour').placeholder = rg.perteJourMax > 0 ? 'ex. -' + fmtNombre(rg.perteJourMax, 0) + ' $ ou 2 pertes' : 'ex. -500 $ ou 2 pertes';
+  $('#jm-heures').placeholder = rg.heuresPermises ? 'ex. ' + rg.heuresPermises : 'ex. 9 h 30 à 11 h';
+  $('#jm-risqueTrade').placeholder = (rg.compte > 0 && rg.risqueMaxPct > 0)
+    ? 'ex. ' + fmtArgent(rg.compte * rg.risqueMaxPct / 100, 0) + ' ou 1 R' : 'ex. 100 $ ou 1 R';
   $('#journalBilan').value = note.bilan || '';
   $('#journalEtat').textContent = note.maj ? 'enregistré le ' + fmtDate(note.maj) : '';
+  $('#matinEtat').textContent = $('#journalEtat').textContent;
+  majStatBiais();
 
   var s = peindreResultatJournee();
   rendreCarteDiscipline(cle, s.jours[cle] || null);
@@ -4517,7 +4688,7 @@ async function majListeJournees(){
   });
   var cles = Object.keys(E.jours).filter(function(c){
     var j = E.jours[c];
-    return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim()) || jourARempliDiscipline(j);
+    return journalEcrit(j) || jourARempliDiscipline(j);
   });
   Object.keys(parJour).forEach(function(c){ if (cles.indexOf(c) < 0) cles.push(c); });
   cles.sort().reverse();
@@ -4525,7 +4696,7 @@ async function majListeJournees(){
   $('#journalListe').innerHTML = cles.length ? '<div class="liste-pieces">' + cles.slice(0, 40).map(function(c){
     var j = E.jours[c] || {};
     var net = tousStats.jours[c] ? tousStats.jours[c].net : null;
-    var extrait = ((j.biais || '') + ' ' + (j.bilan || '')).trim().replace(/\s+/g, ' ').slice(0, 110);
+    var extrait = (texteMatin(j) + ' ' + texteResume(j)).trim().replace(/\s+/g, ' ').slice(0, 110);
     return '<div class="piece" data-jr="' + c + '">' +
       '<div style="flex:1 1 auto"><div class="t">' + fmtJourLong(c) + '</div>' +
       '<div class="d">' + (extrait ? ech(extrait) + (extrait.length >= 110 ? '...' : '') : '<i>pas de texte</i>') + '</div></div>' +
@@ -4545,8 +4716,11 @@ async function enregistrerJournal(silencieux){
   // la journee affichee, pas forcement E.journalDate si la date vient de changer
   var cle = (discJour && discJour.date) || E.journalDate;
   var n = Object.assign({}, E.jours[cle] || {}, {
-    date: cle, biais: $('#journalBiais').value, bilan: $('#journalBilan').value, maj: Date.now()
+    date: cle, bilan: $('#journalBilan').value, maj: Date.now(),
+    biaisSens: $('#jmBiaisSens').dataset.v || null,
+    biaisJuste: $('#jmBiaisJuste').dataset.v || null
   });
+  CHAMPS_MATIN.concat(CHAMPS_RISQUE).forEach(function(c){ n[c.k] = $('#jm-' + c.k).value; });
   if (discJour && discJour.date === cle) {
     n.discipline = discJour.discipline || null;
     n.criteres = Object.assign({}, discJour.criteres);
@@ -4560,7 +4734,9 @@ async function enregistrerJournal(silencieux){
   await dbMettre('jours', n);
   var etat = 'enregistré à ' + fmtHeureCourte(n.maj);
   $('#journalEtat').textContent = etat;
+  $('#matinEtat').textContent = etat;
   if ($('#discEtat')) $('#discEtat').textContent = etat;
+  majStatBiais();
   majListeJournees();
   if (silencieux !== true) toast('Journal du ' + fmtDate(jourDepuisCle(cle).getTime(), false) + ' enregistré.', 'vertf');
 }
@@ -5630,7 +5806,7 @@ function rendreProfilReglages(){
     ['plan', 'Mon stop et ma cible prévus (pour afficher le R)'],
     ['etiquettes', 'Mes étiquettes, mes stratégies et mes notes d\'exécution'],
     ['notes', 'Ce que j\'ai écrit dans chaque trade'],
-    ['journal', 'Mon journal quotidien (biais du matin et bilan du soir)'],
+    ['journal', 'Mon journal quotidien (préparation du matin et résumé de la journée)'],
     ['backtest', 'Mes trades de backtest'],
     ['pourcent', 'Cacher les montants en dollars, tout en % du compte']
   ];
@@ -5804,8 +5980,8 @@ function construirePartage(o){
       var j = E.jours[c];
       if (o.debut !== null && jourDepuisCle(c).getTime() < o.debut) return false;
       if (o.fin !== null && jourDepuisCle(c).getTime() > o.fin) return false;
-      return (j.biais && j.biais.trim()) || (j.bilan && j.bilan.trim());
-    }).sort().map(function(c){ return [c, E.jours[c].biais || '', E.jours[c].bilan || '']; });
+      return journalEcrit(j);
+    }).sort().map(function(c){ return [c, texteMatin(E.jours[c]), texteResume(E.jours[c])]; });
   }
   return p;
 }
@@ -5851,7 +6027,7 @@ function formulairePartage(){
       opt('paPlan', 'Mon stop et ma cible prévus (nécessaires pour afficher le R)', true) +
       opt('paEtq', 'Mes étiquettes, mes stratégies et mes notes d\'exécution', true) +
       opt('paNotes', 'Ce que j\'ai écrit dans chaque trade', false) +
-      opt('paJournal', 'Mon journal quotidien (biais du matin et bilan du soir)', false) +
+      opt('paJournal', 'Mon journal quotidien (préparation du matin et résumé de la journée)', false) +
       opt('paBacktest', 'Mes trades de backtest', false) +
       opt('paPourcent', 'Cacher les montants en dollars, tout montrer en % du compte', false) +
     '</div>' +
@@ -6017,8 +6193,8 @@ async function afficherRapport(p, o){
     (p.j && p.j.length ? '<div class="carte"><h3>Journal quotidien</h3>' + p.j.map(function(j){
       return '<div style="border-bottom:1px solid var(--bord);padding:10px 0">' +
         '<div class="gras">' + fmtJourLong(j[0]) + '</div>' +
-        (j[1] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Biais du matin : </b>' + ech(j[1]) + '</div>' : '') +
-        (j[2] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Bilan du soir : </b>' + ech(j[2]) + '</div>' : '') +
+        (j[1] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Préparation du matin : </b>' + ech(j[1]) + '</div>' : '') +
+        (j[2] ? '<div class="petit" style="white-space:pre-wrap;margin-top:4px"><b class="gris">Résumé de la journée : </b>' + ech(j[2]) + '</div>' : '') +
         '</div>';
     }).join('') + '</div>' : '') +
     '<div class="carte centre">' +
@@ -6331,6 +6507,7 @@ function lancerAutotest(){
    DEMARRAGE ET BRANCHEMENT DES BOUTONS
    ======================================================================= */
 function brancher(){
+  construireCarteMatin();
   // navigation
   $$('#nav button').forEach(function(b){ b.onclick = function(){ allerA(b.dataset.ecran); }; });
   $('#lienJournees').onclick = function(e){ e.preventDefault(); allerA('journees'); };
@@ -6412,7 +6589,16 @@ function brancher(){
   $('#btnJournalAuj').onclick = function(){ E.journalDate = cleJour(Date.now()); rendreJournal(); };
   $('#btnJournalEnr').onclick = function(){ enregistrerJournal(false); };
   // le texte s'enregistre aussi tout seul : changer de date ne perd plus rien
-  $('#journalBiais').oninput = function(){ sauverJournalBientot(1000); };
+  CHAMPS_MATIN.concat(CHAMPS_RISQUE).forEach(function(c){ $('#jm-' + c.k).oninput = function(){ sauverJournalBientot(1000); }; });
+  ['jmBiaisSens', 'jmBiaisJuste'].forEach(function(id){
+    $$('#' + id + ' button').forEach(function(b){
+      b.onclick = function(){
+        var boite = $('#' + id);
+        peindreChoix(boite, boite.dataset.v === b.dataset.v ? '' : b.dataset.v);   // retaper le meme bouton l'efface
+        sauverJournalBientot(300);
+      };
+    });
+  });
   $('#journalBilan').oninput = function(){ sauverJournalBientot(1000); };
 
   // carnet

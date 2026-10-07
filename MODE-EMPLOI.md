@@ -131,11 +131,11 @@ vraiment à quelque chose :
 ## 4 bis. Les photos de la journée
 
 Les photos qui ne sont pas liées à un trade précis vont dans l'onglet **Journal quotidien**,
-carte **Photos de la journée**, sous le biais et le bilan. C'est l'endroit pour le graphique
+carte **Photos de la journée**, sous la préparation du matin et le résumé de la journée. C'est l'endroit pour le graphique
 du matin, tes niveaux tracés, une photo de ton plan sur papier.
 
 Mêmes trois façons de les mettre : le bouton **📷 Ajouter des photos**, **Ctrl+V** n'importe où
-sur la page (même pendant que tu écris ton bilan, le texte n'est pas touché), ou glisser
+sur la page (même pendant que tu écris ton résumé, le texte n'est pas touché), ou glisser
 l'image dans le cadre.
 
 Elles suivent la date affichée en haut de la page : change de jour, tu changes de pile de
@@ -249,8 +249,17 @@ dans le journal, après confirmation.
   dont le pourcentage de fois où tu l'as suivie en entier.
 - **Respect des règles** : pour chaque règle, ton résultat quand tu la respectes contre ton
   résultat quand tu la violes, et l'écart en dollars par trade. C'est l'écran le plus utile.
-- **Journal quotidien** : ton biais écrit *avant* la séance, ton bilan écrit après,
-  avec le profit du jour à côté. En haut, la carte **Discipline du jour** (voir plus bas).
+- **Journal quotidien** : en haut, la carte **Discipline du jour** (voir plus bas). Dessous :
+  - **Préparation du matin**, *avant* la séance, une case par sujet : ton biais du jour
+    (Haussier, Baissier ou Neutre, d'un clic), pourquoi ce biais, ce que le prix a fait cette
+    nuit (Asie, Londres), la liquidité visée, tes niveaux clés, les annonces du jour, ce qui
+    annule ton biais, ton scénario A et ton scénario B, puis ton plan de risque du jour
+    (contrats, risque par trade, où tu arrêtes la journée, tes heures).
+  - **Résumé de la journée de trade**, après la séance : d'un clic, ton biais du matin était
+    juste, juste en partie ou faux, puis le résumé de ta séance.
+  Tes anciennes journées ne perdent rien : l'ancien texte du matin est dans « Pourquoi ce
+  biais », l'ancien bilan du soir est dans le résumé. L'écran **Tes journées** compte combien de
+  fois ton biais est juste et ce que tu gagnes les jours où il est faux.
   Tout s'y enregistre tout seul, le texte aussi : changer de date ne perd plus rien.
 - **Discipline** : l'analyse de tes notes de discipline (voir la section 6 bis).
 - **Carnet** : les notes qui ne sont pas rattachées à un trade (revue de semaine,
@@ -297,7 +306,7 @@ avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 236 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 247 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash
