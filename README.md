@@ -39,13 +39,17 @@ aucune donnée qui sort du navigateur.
   annonces, invalidation, scénarios A et B, plan de risque), résumé de la journée et justesse du biais.
 - **Carnet libre** avec gabarits, **comparaison de périodes**,
   **journal de backtest** séparé des trades réels.
-- **Export / import JSON** complet, captures comprises. C'est la seule sauvegarde.
+- **Synchronisation entre appareils** (ordinateur et téléphone) par Supabase, protégée par la clé
+  de publication : on l'active sur l'ordinateur, on scanne un code QR avec le téléphone.
+- **Export / import JSON** complet, captures comprises.
 
 ## Où sont les données
 
-Dans IndexedDB, c'est-à-dire dans le navigateur, sur l'appareil. Rien n'est envoyé nulle part.
-Chaque adresse a sa propre base : le fichier ouvert en local et la version en ligne ne
-partagent pas leurs données. Pour passer de l'une à l'autre, exporter puis importer.
+Dans IndexedDB, c'est-à-dire dans le navigateur, sur l'appareil. Chaque adresse a sa propre
+base. Quand la synchronisation est active, chaque modification part aussi dans la base
+Supabase (table `journal_sync`, voir `supabase/sync.sql`), accessible seulement avec la clé
+de publication, et les autres appareils la récupèrent. Sans synchronisation, rien n'est envoyé
+nulle part : pour passer d'un appareil à l'autre, exporter puis importer.
 
 ## Vérifier le calcul
 

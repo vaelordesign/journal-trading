@@ -387,6 +387,10 @@ svg text{font-family:inherit}
 .saisie-r input.r-pos{border-color:var(--vert);color:var(--vert-clair)}
 .saisie-r input.r-neg{border-color:var(--rouge);color:var(--rouge-clair)}
 .saisie-r input.r-faux{border-color:var(--rouge);border-style:dashed}
+.pt-sync{cursor:pointer;white-space:nowrap;font-size:11px}
+.pt-sync[hidden]{display:none}
+.qr-boite{display:inline-block;background:#fff;padding:10px;border-radius:10px;line-height:0}
+.qr-boite svg,.qr-boite img{width:200px;height:200px}
 .cal-case .jr{font-size:10px;font-variant-numeric:tabular-nums;color:var(--texte2)}
 .ligne-choix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px}
 .choix-boutons{display:flex;gap:4px;flex-wrap:wrap}
@@ -431,6 +435,7 @@ svg text{font-family:inherit}
       <label class="pilule-interrupteur" title="Inclure les trades de backtest (simulés) dans les statistiques">
         <input type="checkbox" id="chkSimules"> Inclure le backtest
       </label>
+      <span class="puce v pt-sync" id="indSync" hidden></span>
       <button class="pt" id="btnPartager">&#128279; Partager</button>
       <button class="pt" id="btnSauvegarde">&#128190; Exporter</button>
       <button class="pt" id="btnRestaurer">&#128228; Importer</button>
@@ -836,6 +841,11 @@ svg text{font-family:inherit}
       </details>
     </div>
 
+    <div class="carte" id="carteSync">
+      <h3>Ton journal sur ton téléphone <span class="petit gris">et sur tous tes appareils</span></h3>
+      <div id="syncContenu"></div>
+    </div>
+
     <div class="carte">
       <h3>Sauvegarde</h3>
       <div class="avis jaunef">C'est ta seule sauvegarde. Le fichier JSON contient tout&nbsp;: fills, trades, notes, playbooks, réglages et les captures d'écran. Garde-le ailleurs que sur ce disque.</div>
@@ -870,8 +880,9 @@ svg text{font-family:inherit}
 <script>
 'use strict';
 /* =======================================================================
-   JOURNAL DE TRADING - 100% local, aucun serveur, aucun compte.
-   Donnees dans IndexedDB. Sauvegarde = bouton Exporter (JSON).
+   JOURNAL DE TRADING - local d'abord : les donnees sont dans IndexedDB.
+   Sauvegarde = bouton Exporter (JSON). Synchronisation entre appareils facultative,
+   par Supabase (section SYNCHRONISATION ENTRE APPAREILS, supabase/sync.sql).
    ======================================================================= */
 
 /* ==================== DEBUT MOTEUR ====================
@@ -2365,10 +2376,32 @@ function pReq(req){
 function magasin(nom, mode){ return DB.transaction(nom, mode || 'readonly').objectStore(nom); }
 function dbTous(nom){ return pReq(magasin(nom).getAll()); }
 function dbLire(nom, cle){ return pReq(magasin(nom).get(cle)); }
-function dbMettre(nom, val){ return pReq(magasin(nom, 'readwrite').put(val)); }
-function dbSupprimer(nom, cle){ return pReq(magasin(nom, 'readwrite').delete(cle)); }
-function dbVider(nom){ return pReq(magasin(nom, 'readwrite').clear()); }
-function dbMettreLot(nom, liste){
+
+/* Toute ecriture faite par Julien passe par dbMettre, dbMettreLot, dbSupprimer,
+   dbSupprimerLot ou dbVider : elle est datee (_maj) et, si la synchronisation est
+   active sur cet appareil, mise dans la file des envois (marquerSync).
+   Les versions « Brut » ecrivent sans dater ni envoyer : elles servent aux trades
+   recalcules depuis les fills (chaque appareil les recalcule lui-meme) et a ce qui
+   arrive d'un autre appareil. */
+var MAGASINS_SYNC = ['fills', 'trades', 'images', 'jours', 'reglages', 'playbooks', 'notes', 'gabarits'];
+function cleDuMagasin(nom, v){ return nom === 'trades' ? v.cle : (nom === 'jours' ? v.date : v.id); }
+function dater(nom, v, t){ if (v && MAGASINS_SYNC.indexOf(nom) >= 0) v._maj = t; return v; }
+function dbMettre(nom, val){
+  var t = Date.now();
+  dater(nom, val, t);
+  return pReq(magasin(nom, 'readwrite').put(val)).then(function(r){ marquerSync(nom, [cleDuMagasin(nom, val)], t); return r; });
+}
+function dbSupprimer(nom, cle){
+  return pReq(magasin(nom, 'readwrite').delete(cle)).then(function(r){ marquerSync(nom, [cle], Date.now()); return r; });
+}
+async function dbVider(nom){
+  // les cles d'abord : il faut dire aux autres appareils ce qui disparait
+  var cles = (SYNC.actif && MAGASINS_SYNC.indexOf(nom) >= 0) ? await pReq(magasin(nom).getAllKeys()) : [];
+  await pReq(magasin(nom, 'readwrite').clear());
+  marquerSync(nom, cles, Date.now());
+}
+function dbViderBrut(nom){ return pReq(magasin(nom, 'readwrite').clear()); }
+function dbMettreLotBrut(nom, liste){
   if (!liste.length) return Promise.resolve();
   return new Promise(function(res, rej){
     var t = DB.transaction(nom, 'readwrite'), s = t.objectStore(nom);
@@ -2377,7 +2410,14 @@ function dbMettreLot(nom, liste){
     t.onerror = function(){ rej(t.error); };
   });
 }
-function dbSupprimerLot(nom, cles){
+function dbMettreLot(nom, liste){
+  var t = Date.now();
+  liste.forEach(function(v){ dater(nom, v, t); });
+  return dbMettreLotBrut(nom, liste).then(function(){
+    marquerSync(nom, liste.map(function(v){ return cleDuMagasin(nom, v); }), t);
+  });
+}
+function dbSupprimerLotBrut(nom, cles){
   if (!cles.length) return Promise.resolve();
   return new Promise(function(res, rej){
     var t = DB.transaction(nom, 'readwrite'), s = t.objectStore(nom);
@@ -2386,8 +2426,270 @@ function dbSupprimerLot(nom, cles){
     t.onerror = function(){ rej(t.error); };
   });
 }
+function dbSupprimerLot(nom, cles){
+  return dbSupprimerLotBrut(nom, cles).then(function(){ marquerSync(nom, cles, Date.now()); });
+}
 function dbParParent(parent){
   return pReq(magasin('images').index('parent').getAll(parent));
+}
+
+/* =======================================================================
+   SYNCHRONISATION ENTRE APPAREILS (ordinateur, telephone)
+   Chaque appareil garde sa base IndexedDB. Quand la synchro est active, chaque
+   ecriture part aussi vers Supabase (table journal_sync, une ligne par
+   enregistrement, fichier supabase/sync.sql), et chaque appareil recupere ce qui
+   a change ailleurs : a l'ouverture, au retour sur l'onglet, toutes les 90 s, et
+   2,5 s apres chaque modification.
+   - La cle est celle du profil public (reglages.clePublication, compte PROFIL_PUBLIC).
+   - Ce qui est propre a l'appareil (synchro active ou non, derniere revision recue,
+     envois en attente, identifiant de l'appareil) est dans localStorage : il ne voyage pas.
+   - Deux appareils modifient la meme chose : l'ecriture la plus recente gagne
+     (heure de l'appareil, champ _maj), ici comme sur le serveur.
+   - Les cles IndexedDB voyagent en JSON (« "2026-10-08" », « "MNQ#123" ») pour
+     garder leur type a l'arrivee.
+   ======================================================================= */
+var CLE_SYNC_LOCAL = 'jt_sync_v1';
+var SYNC = { actif: false, rev: 0, attente: {}, appareil: '', dernier: null, erreur: null,
+             enCours: false, aRefaire: false, minuteur: null, progres: '' };
+
+function lireSyncLocal(){
+  try {
+    var o = JSON.parse(localStorage.getItem(CLE_SYNC_LOCAL) || '{}');
+    SYNC.actif = !!o.actif; SYNC.rev = o.rev || 0; SYNC.attente = o.attente || {};
+    SYNC.appareil = o.appareil || ''; SYNC.dernier = o.dernier || null;
+  } catch (e) {}
+  if (!SYNC.appareil) { SYNC.appareil = 'ap-' + uid() + uid(); ecrireSyncLocal(); }
+}
+function ecrireSyncLocal(){
+  try {
+    localStorage.setItem(CLE_SYNC_LOCAL, JSON.stringify({ actif: SYNC.actif, rev: SYNC.rev, attente: SYNC.attente,
+      appareil: SYNC.appareil, dernier: SYNC.dernier }));
+  } catch (e) {}
+}
+function cleAttente(nom, cle){ return nom + '\u0001' + JSON.stringify(cle); }
+function marquerSync(nom, cles, t){
+  if (!SYNC.actif || MAGASINS_SYNC.indexOf(nom) < 0 || !cles.length) return;
+  cles.forEach(function(c){ SYNC.attente[cleAttente(nom, c)] = t; });
+  ecrireSyncLocal();
+  majIndicateurSync();
+  syncBientot();
+}
+function syncBientot(delai){
+  clearTimeout(SYNC.minuteur);
+  SYNC.minuteur = setTimeout(function(){ synchroniser(); }, delai || 2500);
+}
+
+async function rpcSync(nom, params){
+  var rep = await fetch(SUPA_URL + '/rest/v1/rpc/' + nom, {
+    method: 'POST',
+    headers: { apikey: SUPA_CLE, Authorization: 'Bearer ' + SUPA_CLE, 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ p_compte: PROFIL_PUBLIC, p_secret: E.reglages.clePublication || '' }, params || {}))
+  });
+  var txt = await rep.text();
+  var json = null;
+  try { json = txt ? JSON.parse(txt) : null; } catch (e) {}
+  if (!rep.ok) {
+    var msg = (json && json.message) || ('erreur ' + rep.status);
+    throw new Error(msg.indexOf('cle de synchronisation refusee') >= 0
+      ? 'clé refusée : publie ton profil une fois depuis l\'ordinateur (Réglages, Profil public), puis réessaie'
+      : msg);
+  }
+  return json;
+}
+
+// ce qui part sur le serveur : les photos en texte (data URL), les trades sans champ derive
+async function versEnvoi(nom, v){
+  if (nom === 'images') {
+    var c = Object.assign({}, v);
+    delete c.blob;
+    c.donnees = v.blob ? await blobVersDataUrl(v.blob) : null;
+    return c;
+  }
+  if (nom === 'trades') return nettoyerPourDb(v);
+  return v;
+}
+function depuisEnvoi(nom, v){
+  if (nom === 'images') {
+    var c = Object.assign({}, v);
+    c.blob = v.donnees ? dataUrlVersBlob(v.donnees) : null;
+    delete c.donnees;
+    return c;
+  }
+  return v;
+}
+
+// Envoie la file d'attente par paquets d'environ 2 Mo. Une cle remodifiee pendant
+// l'envoi reste dans la file (son heure a change) et repart au tour suivant.
+async function syncPousser(){
+  var cles = Object.keys(SYNC.attente);
+  if (!cles.length) return 0;
+  var instant = Object.assign({}, SYNC.attente);
+  var paquet = [], taille = 0, envoyes = 0;
+  var vider = async function(){
+    if (!paquet.length) return;
+    await rpcSync('journal_sync_pousser', { p_lignes: paquet, p_appareil: SYNC.appareil });
+    paquet.forEach(function(l){
+      var k = l.m + '\u0001' + l.c;
+      if (SYNC.attente[k] === instant[k]) delete SYNC.attente[k];
+    });
+    envoyes += paquet.length;
+    ecrireSyncLocal();
+    SYNC.progres = 'envoi ' + envoyes + ' / ' + cles.length;
+    majIndicateurSync();
+    paquet = []; taille = 0;
+  };
+  for (var i = 0; i < cles.length; i++) {
+    var k = cles[i], p = k.indexOf('\u0001');
+    var nom = k.slice(0, p), cleTxt = k.slice(p + 1);
+    if (MAGASINS_SYNC.indexOf(nom) < 0) { delete SYNC.attente[k]; continue; }
+    var v = await dbLire(nom, JSON.parse(cleTxt));
+    var ligne = v
+      ? { m: nom, c: cleTxt, v: await versEnvoi(nom, v), s: false, t: instant[k] }
+      : { m: nom, c: cleTxt, v: null, s: true, t: instant[k] };
+    var poids = JSON.stringify(ligne).length;
+    if (paquet.length && (taille + poids > 2000000 || paquet.length >= 400)) await vider();
+    paquet.push(ligne); taille += poids;
+  }
+  await vider();
+  return envoyes;
+}
+
+// Recoit tout ce qui a change depuis la derniere revision connue. Renvoie les magasins touches.
+async function syncTirer(){
+  var touches = {}, fin = false, recus = 0;
+  while (!fin) {
+    var r = await rpcSync('journal_sync_tirer', { p_depuis: SYNC.rev, p_appareil: SYNC.appareil });
+    var aMettre = {}, aSuppr = {};
+    (r.lignes || []).forEach(function(l){
+      if (MAGASINS_SYNC.indexOf(l.m) < 0) return;
+      var k = l.m + '\u0001' + l.c;
+      // ma version locale, pas encore envoyee, est plus recente : elle gagne et partira
+      if (SYNC.attente[k] && SYNC.attente[k] > (l.t || 0)) return;
+      delete SYNC.attente[k];
+      if (l.s || !l.v) (aSuppr[l.m] = aSuppr[l.m] || []).push(JSON.parse(l.c));
+      else (aMettre[l.m] = aMettre[l.m] || []).push(depuisEnvoi(l.m, l.v));
+      touches[l.m] = true;
+    });
+    for (var m in aMettre) await dbMettreLotBrut(m, aMettre[m]);
+    for (var s in aSuppr) await dbSupprimerLotBrut(s, aSuppr[s]);
+    recus += (r.lignes || []).length;
+    SYNC.rev = r.rev || SYNC.rev;
+    fin = r.fin !== false;
+    ecrireSyncLocal();
+    if (!fin) { SYNC.progres = 'réception ' + recus + ' enregistrements'; majIndicateurSync(); }
+  }
+  return touches;
+}
+
+// Recharge en memoire ce qui a change, recalcule et repeint, sans couper une saisie en cours.
+async function appliquerSync(touches){
+  if (touches.reglages) {
+    var cleIci = E.reglages.clePublication;
+    E.reglages = fusionnerReglages(await dbLire('reglages', 'main'));
+    if (!E.reglages.clePublication && cleIci) E.reglages.clePublication = cleIci;
+  }
+  if (touches.fills) E.fills = await dbTous('fills');
+  if (touches.playbooks) E.playbooks = await dbTous('playbooks');
+  if (touches.notes) E.notes = await dbTous('notes');
+  if (touches.gabarits) E.gabarits = await dbTous('gabarits');
+  if (touches.jours) {
+    var jours = await dbTous('jours');
+    E.jours = {};
+    jours.forEach(function(j){ E.jours[j.date] = j; });
+  }
+  if (touches.fills || touches.trades || touches.playbooks || touches.reglages) await recalculer();
+  // une fenetre est ouverte (detail d'un trade...) : on repeint a sa fermeture
+  if (!$('#voile').hidden) { SYNC.aRepeindre = true; return; }
+  var actif = document.activeElement;
+  var enSaisie = actif && (/^(INPUT|TEXTAREA|SELECT)$/.test(actif.tagName) || actif.isContentEditable);
+  if (enSaisie) actif.addEventListener('blur', function(){ rendre(); }, { once: true });
+  else rendre();
+}
+
+async function synchroniser(){
+  if (!SYNC.actif || !DB) return;
+  if (SYNC.enCours) { SYNC.aRefaire = true; return; }
+  if (!navigator.onLine) { SYNC.erreur = 'hors ligne'; majIndicateurSync(); return; }
+  SYNC.enCours = true; SYNC.progres = ''; majIndicateurSync();
+  try {
+    var touches = await syncTirer();
+    if (Object.keys(touches).length) await appliquerSync(touches);
+    await syncPousser();
+    SYNC.dernier = Date.now();
+    SYNC.erreur = null;
+  } catch (e) {
+    SYNC.erreur = (e && e.message) ? e.message : String(e);
+  }
+  SYNC.enCours = false; SYNC.progres = '';
+  ecrireSyncLocal();
+  majIndicateurSync();
+  if (E.ecran === 'reglages') rendreSyncReglages();
+  if (SYNC.aRefaire) { SYNC.aRefaire = false; syncBientot(300); }
+}
+
+// la petite pastille en haut a droite
+function majIndicateurSync(){
+  var el = $('#indSync');
+  if (!el) return;
+  el.hidden = !SYNC.actif;
+  if (!SYNC.actif) return;
+  var nb = Object.keys(SYNC.attente).length;
+  var txt, c = '';
+  if (SYNC.enCours) txt = '&#9729; ' + (SYNC.progres || 'synchro...');
+  else if (SYNC.erreur) { txt = '&#9729; ' + (SYNC.erreur === 'hors ligne' ? 'hors ligne' : 'erreur de synchro'); c = 'r'; }
+  else if (nb) { txt = '&#9729; ' + nb + ' en attente'; c = 'j'; }
+  else txt = '&#9729; à jour' + (SYNC.dernier ? ' ' + fmtHeureCourte(SYNC.dernier) : '');
+  el.className = 'puce ' + (c || 'v') + ' pt-sync';
+  el.innerHTML = txt;
+  el.title = SYNC.erreur ? 'Synchronisation : ' + SYNC.erreur : 'Ton journal est synchronisé entre tes appareils';
+}
+
+// Premiere activation sur l'appareil qui a deja le journal : tout part en ligne.
+async function activerSync(){
+  if (!E.reglages.clePublication) throw new Error('aucune clé : publie ton profil une fois (Réglages, Profil public)');
+  await rpcSync('journal_sync_etat');                 // verifie la cle avant de toucher a quoi que ce soit
+  SYNC.actif = true; SYNC.rev = 0; SYNC.erreur = null;
+  for (var i = 0; i < MAGASINS_SYNC.length; i++) {
+    var nom = MAGASINS_SYNC[i];
+    var tous = await dbTous(nom);
+    // tout part, trades compris : les annotations d'avant la synchro ne portent pas de date
+    tous.forEach(function(v){ SYNC.attente[cleAttente(nom, cleDuMagasin(nom, v))] = v._maj || 1; });
+  }
+  ecrireSyncLocal();
+  await synchroniser();
+}
+
+// Un autre appareil ouvre le lien #lier=<compte>.<cle> : il recoit tout le journal.
+async function lierAppareil(compte, cle){
+  var nbLocal = E.fills.length + E.trades.length + Object.keys(E.jours).length + E.notes.length;
+  if (compte !== PROFIL_PUBLIC) { toast('Ce lien vient d\'un autre journal.', 'rougef'); return false; }
+  if (SYNC.actif && E.reglages.clePublication === cle) {
+    toast('Cet appareil est déjà synchronisé.', 'vertf');
+    return true;
+  }
+  if (nbLocal && !await confirmer('Cet appareil contient déjà un journal (' + E.trades.length + ' trades, ' +
+      Object.keys(E.jours).length + ' journées). Il va être <b>remplacé</b> par le journal en ligne, celui de ton ordinateur.',
+      'Remplacer par mon journal en ligne')) return false;
+  var avant = E.reglages.clePublication;
+  E.reglages.clePublication = cle;
+  try {
+    await rpcSync('journal_sync_etat');               // la cle est-elle bonne ?
+  } catch (e) {
+    E.reglages.clePublication = avant;
+    toast('Lien refusé : ' + ech(e.message), 'rougef');
+    return false;
+  }
+  for (var i = 0; i < MAGASINS_SYNC.length; i++) await dbViderBrut(MAGASINS_SYNC[i]);
+  libererUrls();
+  SYNC.actif = true; SYNC.rev = 0; SYNC.attente = {}; SYNC.erreur = null;
+  ecrireSyncLocal();
+  await synchroniser();
+  if (SYNC.erreur) { toast('Réception interrompue : ' + ech(SYNC.erreur) + '. Elle reprendra toute seule.', 'rougef'); }
+  // tout recharger : la base locale a ete videe puis remplie depuis le serveur
+  await chargerTout();
+  // la cle doit rester sur cet appareil meme si les reglages recus ne la portaient pas
+  if (E.reglages.clePublication !== cle) { E.reglages.clePublication = cle; await dbMettre('reglages', E.reglages); }
+  return true;
 }
 
 /* =======================================================================
@@ -2575,6 +2877,8 @@ function fermerModale(){
   $('#modale')._ajouterImages = null;
   $('#modale').innerHTML = '';
   document.body.style.overflow = '';
+  // une synchro est arrivee pendant que la fenetre etait ouverte
+  if (SYNC.aRepeindre) { SYNC.aRepeindre = false; rendre(); }
 }
 function confirmer(question, texteBouton){
   return new Promise(function(res){
@@ -2797,6 +3101,7 @@ async function recalculer(){
     var vieux = parCle[t.cle];
     if (vieux) {
       CHAMPS_ANNOTATION.forEach(function(c){ if (vieux[c] !== undefined) t[c] = vieux[c]; });
+      if (vieux._maj) t._maj = vieux._maj;   // recalculer n'est pas une modification
     }
     aEcrire.push(t);
   });
@@ -2805,8 +3110,10 @@ async function recalculer(){
     return t.source === 'csv' && !clesCsv[t.cle];
   }).map(function(t){ return t.cle; });
 
-  await dbMettreLot('trades', aEcrire);
-  if (aSupprimer.length) await dbSupprimerLot('trades', aSupprimer);
+  // ecritures « brutes » : chaque appareil recalcule ses trades depuis les fills,
+  // seules les annotations de Julien voyagent (elles passent par dbMettre)
+  await dbMettreLotBrut('trades', aEcrire);
+  if (aSupprimer.length) await dbSupprimerLotBrut('trades', aSupprimer);
 
   var manuels = stockes.filter(function(t){ return t.source !== 'csv'; });
   E.trades = aEcrire.concat(manuels);
@@ -5721,6 +6028,7 @@ function rendreReglages(){
 
   rendreDisciplineReglages();
   rendreProfilReglages();
+  rendreSyncReglages();
 
   var octets = 0;
   E.trades.forEach(function(t){ octets += JSON.stringify(nettoyerPourDb(t)).length; });
@@ -5785,6 +6093,114 @@ function rendreDisciplineReglages(){
 
 /* ---------- carte Profil public dans les Réglages ---------- */
 function adresseProfil(){ return location.href.split('#')[0].split('?')[0]; }
+
+/* ---------- carte « Ton journal sur ton telephone » (Reglages) ---------- */
+// le telephone doit ouvrir le site en ligne, meme si l'ordinateur utilise une copie locale
+var ADRESSE_EN_LIGNE = 'https://vaelordesign.github.io/journal-trading/';
+function lienDeLiaison(){ return ADRESSE_EN_LIGNE + '#lier=' + PROFIL_PUBLIC + '.' + (E.reglages.clePublication || ''); }
+
+function rendreSyncReglages(){
+  var boite = $('#syncContenu');
+  if (!boite) return;
+  if (!SYNC.actif) {
+    boite.innerHTML =
+      '<div class="petit" style="margin-bottom:10px">Ton journal vit dans ce navigateur : sans synchronisation, ton téléphone ne le voit pas. ' +
+      'Active-la ici, <b>sur l\'ordinateur qui a ton journal</b> : tout part dans ta base en ligne (la même que ton profil public), ' +
+      'protégée par ta clé de publication. Fills, trades et annotations, R, journal quotidien, discipline, notes, photos et réglages. ' +
+      'Ensuite tu scannes un code avec ton téléphone, il reçoit tout, et ce que tu modifies d\'un côté apparaît de l\'autre en quelques secondes.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<button class="primaire" id="syncActiver">Activer la synchronisation sur cet appareil</button>' +
+        '<span class="petit gris" id="syncMsg"></span></div>' +
+      '<div class="petit gris" style="margin-top:8px">Tu es sur ton téléphone ? N\'active rien ici : ouvre le code ou le lien affiché sur ton ordinateur.</div>';
+    $('#syncActiver').onclick = async function(){
+      var b = this;
+      b.disabled = true;
+      $('#syncMsg').textContent = 'Envoi de ton journal en ligne...';
+      try {
+        await activerSync();
+        if (SYNC.erreur) throw new Error(SYNC.erreur);
+        toast('Synchronisation active. Scanne maintenant le code avec ton téléphone.', 'vertf');
+        rendreSyncReglages();
+        afficherQrSync();
+      } catch (e) {
+        SYNC.actif = false; SYNC.attente = {}; ecrireSyncLocal(); majIndicateurSync();
+        b.disabled = false;
+        $('#syncMsg').innerHTML = '<span class="rouge">' + ech(e.message || e) + '</span>';
+      }
+    };
+    return;
+  }
+  var nb = Object.keys(SYNC.attente).length;
+  boite.innerHTML =
+    '<div class="avis ' + (SYNC.erreur ? 'rougef' : 'vertf') + '" style="margin-bottom:10px">' +
+      '<b>Synchronisation active sur cet appareil.</b> ' +
+      (SYNC.dernier ? 'Dernière synchro à ' + fmtHeureCourte(SYNC.dernier) + '. ' : '') +
+      (nb ? nb + ' modification' + (nb > 1 ? 's' : '') + ' en attente d\'envoi. ' : 'Tout est envoyé. ') +
+      (SYNC.erreur ? '<br>Problème : ' + ech(SYNC.erreur) + '. Ça réessaie tout seul.' : '') +
+      '<div class="petit" id="syncEnLigne" style="margin-top:4px"></div></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="primaire" id="syncTel">&#128241; Ouvrir sur mon téléphone</button>' +
+      '<button id="syncMaintenant">Synchroniser maintenant</button>' +
+      '<button class="dangereux pt" id="syncDesactiver">Désactiver sur cet appareil</button>' +
+    '</div>' +
+    '<div id="syncQr"></div>' +
+    '<div class="petit gris" style="margin-top:10px">Si deux appareils modifient la même chose, la modification la plus récente gagne. ' +
+      'Si tu changes ta clé de publication, il faudra relier tes appareils de nouveau.</div>';
+  $('#syncTel').onclick = afficherQrSync;
+  $('#syncMaintenant').onclick = async function(){ await synchroniser(); toast(SYNC.erreur ? 'Synchro impossible : ' + SYNC.erreur : 'Synchronisé.', SYNC.erreur ? 'rougef' : 'vertf'); };
+  $('#syncDesactiver').onclick = async function(){
+    if (!await confirmer('Cet appareil arrête de se synchroniser. Il <b>garde</b> le journal tel qu\'il est maintenant, ' +
+      'et tes autres appareils continuent sans lui.', 'Désactiver ici')) return;
+    SYNC.actif = false; SYNC.attente = {}; SYNC.erreur = null;
+    ecrireSyncLocal(); majIndicateurSync(); rendreSyncReglages();
+  };
+  rpcSync('journal_sync_etat').then(function(e){
+    var el = $('#syncEnLigne');
+    if (el && e) el.textContent = 'En ligne : ' + e.lignes + ' enregistrements, dont ' + e.photos + ' photo' + (e.photos > 1 ? 's' : '') +
+      ', ' + fmtOctets(e.octets) + ' sur les 500 Mo gratuits de la base.';
+  }).catch(function(){});
+}
+
+// le code a scanner avec le telephone, et le lien a copier
+function afficherQrSync(){
+  var zone = $('#syncQr');
+  if (!zone) return;
+  var lien = lienDeLiaison();
+  zone.innerHTML = '<div class="grille g2" style="margin-top:14px;align-items:center">' +
+    '<div style="text-align:center"><div class="qr-boite" id="syncQrImage"><span style="color:#333;line-height:1.4">Préparation du code...</span></div></div>' +
+    '<div class="petit">' +
+      '<b>Sur ton téléphone :</b><br>1. Ouvre l\'appareil photo et vise le code.<br>2. Touche le lien qui apparaît.<br>' +
+      '3. Confirme : ton journal arrive, photos comprises (quelques secondes à une minute).<br>' +
+      '4. Ajoute la page à ton écran d\'accueil pour l\'ouvrir comme une app : sur iPhone, bouton Partager puis ' +
+      '« Sur l\'écran d\'accueil » ; sur Android, menu &#8942; puis « Ajouter à l\'écran d\'accueil ».' +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="pt" id="syncCopier">Copier le lien</button></div>' +
+      '<div class="avis jaunef" style="margin-top:10px;margin-bottom:0">Ce code et ce lien contiennent ta clé : ils ouvrent ton journal à ' +
+      'n\'importe qui. Ne les envoie qu\'à toi-même.</div>' +
+    '</div></div>';
+  $('#syncCopier').onclick = function(){
+    navigator.clipboard.writeText(lien).then(function(){ toast('Lien copié. Envoie-le-toi, puis ouvre-le sur ton téléphone.', 'vertf'); },
+      function(){ toast('Copie refusée par le navigateur.', 'rougef'); });
+  };
+  chargerQr().then(function(){
+    var qr = window.qrcode(0, 'M');
+    qr.addData(lien);
+    qr.make();
+    $('#syncQrImage').innerHTML = qr.createSvgTag(5, 0);
+  }).catch(function(){
+    $('#syncQrImage').innerHTML = '<span style="color:#333;line-height:1.4">Code indisponible hors ligne :<br>utilise « Copier le lien ».</span>';
+  });
+}
+// la librairie du code QR n'est chargee que si on en a besoin
+function chargerQr(){
+  if (window.qrcode) return Promise.resolve();
+  return new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+    s.onload = function(){ window.qrcode ? res() : rej(); };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
 
 function rendreProfilReglages(){
   var r = E.reglages;
@@ -6508,6 +6924,15 @@ function lancerAutotest(){
    ======================================================================= */
 function brancher(){
   construireCarteMatin();
+
+  // synchronisation : au retour sur l'onglet, au retour du reseau, et toutes les 90 s
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') synchroniser(); });
+  window.addEventListener('online', function(){ synchroniser(); });
+  setInterval(function(){ if (document.visibilityState === 'visible') synchroniser(); }, 90000);
+  $('#indSync').onclick = function(){
+    allerA('reglages');
+    setTimeout(function(){ $('#carteSync').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  };
   // navigation
   $$('#nav button').forEach(function(b){ b.onclick = function(){ allerA(b.dataset.ecran); }; });
   $('#lienJournees').onclick = function(e){ e.preventDefault(); allerA('journees'); };
@@ -6703,7 +7128,8 @@ function brancher(){
 
   $('#btnAutotest').onclick = lancerAutotest;
   $('#btnToutEffacer').onclick = async function(){
-    if (!await confirmer('<b>Tout effacer</b> : fills, trades, notes, captures, playbooks, journal et réglages. Exporte une sauvegarde avant si tu veux pouvoir revenir en arriere.', 'Tout effacer')) return;
+    if (!await confirmer('<b>Tout effacer</b> : fills, trades, notes, captures, playbooks, journal et réglages. Exporte une sauvegarde avant si tu veux pouvoir revenir en arriere.' +
+      (SYNC.actif ? '<br><br><b class="rouge">La synchronisation est active : ton journal sera aussi effacé en ligne et sur tes autres appareils.</b>' : ''), 'Tout effacer')) return;
     if (!await confirmer('Dernière confirmation. Cette action est definitive.', 'Oui, tout effacer')) return;
     await Promise.all(['fills', 'trades', 'images', 'jours', 'reglages', 'playbooks', 'notes', 'gabarits'].map(dbVider));
     libererUrls();
@@ -6797,6 +7223,15 @@ function brancher(){
 async function demarrer(){
   var hash = location.hash || '';
 
+  // 0. Lien de liaison d'un nouvel appareil (#lier=<compte>.<cle>) : la cle quitte
+  //    l'adresse tout de suite, puis on ouvre le journal de travail.
+  var liaison = null;
+  if (hash.indexOf('#lier=') === 0) {
+    liaison = decodeURIComponent(hash.slice(6));
+    history.replaceState(null, '', location.pathname + location.search + '#bord');
+    hash = '#bord';
+  }
+
   // 1. Lien fige recu par message : on n'ouvre meme pas la base. Le journal de
   //    la personne qui recoit le lien n'est ni lu, ni touche, ni ecrase.
   if (hash.indexOf('#rapport=') === 0) {
@@ -6827,11 +7262,26 @@ async function demarrer(){
       '<br>En navigation privee ou avec les donnees de site bloquees, le journal ne peut rien enregistrer.</div>';
     return;
   }
+  lireSyncLocal();
   await chargerTout();
   brancher();
   var h = (location.hash || '').replace('#', '');
   allerA(ECRANS_VALIDES.indexOf(h) >= 0 ? h : (E.fills.length || E.trades.length ? 'bord' : 'import'));
   presetComparaison('mois');
+  majIndicateurSync();
+  if (liaison) {
+    var pt = liaison.indexOf('.');
+    var ok = pt > 0 && await lierAppareil(liaison.slice(0, pt), liaison.slice(pt + 1));
+    if (ok) {
+      allerA('bord');
+      modale('Ton journal est sur cet appareil',
+        '<div class="petit">Tout est arrivé. Ce que tu modifies ici apparaît sur ton ordinateur en quelques secondes, et l\'inverse aussi.<br><br>' +
+        '<b>Pour l\'ouvrir comme une app :</b><br>sur iPhone, bouton Partager puis « Sur l\'écran d\'accueil » ;<br>' +
+        'sur Android, menu &#8942; puis « Ajouter à l\'écran d\'accueil ».</div>', '<button class="primaire" data-fermer>Compris</button>');
+    }
+  } else if (SYNC.actif) {
+    synchroniser();
+  }
   if (!E.trades.length && !E.fills.length) {
     $('#resumeImport').innerHTML = '<div class="avis bleuf">Journal vide. Commence par glisser ton CSV ' +
       '<b>orders-filled</b> de Tradovate, ou <b>Order history</b> de TradingView, dans la zone ci-dessus. ' +

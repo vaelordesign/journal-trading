@@ -7,13 +7,13 @@ Deux façons de l'ouvrir, au choix :
 - **En local** : double-clic sur **index.html**, ça s'ouvre dans Chrome.
 
 Dans les deux cas : aucun compte, aucune connexion, aucun serveur qui garde quoi que ce soit.
-Tes trades restent dans le navigateur de l'appareil, même en ligne : la page est servie par
-GitHub, les données ne lui sont jamais envoyées.
+Tes trades restent dans le navigateur de l'appareil : la page est servie par GitHub, les
+données ne lui sont jamais envoyées.
 
-**Attention, une adresse = une base.** Le fichier local et la version en ligne ne partagent
-pas leurs données, et le téléphone ne partage pas non plus avec l'ordinateur. Pour passer de
-l'un à l'autre : **Exporter** d'un côté, **Importer** de l'autre. Choisis un endroit principal
-et tiens-t'y.
+**Une adresse = une base.** Sans synchronisation, le fichier local, la version en ligne et le
+téléphone ne partagent rien. **Pour avoir ton journal sur ton téléphone, active la
+synchronisation** (section 4 quater) : tout passe alors par ta base en ligne et chaque appareil
+voit ce que font les autres.
 
 ---
 
@@ -193,6 +193,35 @@ Comment ça marche, et ses deux limites :
   mais traite-le comme une capture d'écran de ton compte.
 - C'est une **photo figée**. Le rapport ne bougera plus, même quand tu traderas demain.
   Pour montrer la suite, tu regénères un lien.
+
+## 4 quater. Ton journal sur ton téléphone (synchronisation)
+
+1. **Sur l'ordinateur**, dans ton journal en ligne (adresse qui finit par **#bord**) : onglet
+   **Réglages**, carte **Ton journal sur ton téléphone**, bouton **Activer la synchronisation sur
+   cet appareil**. Tout part dans ta base en ligne : fills, trades et leurs annotations (R, setup,
+   notes, étiquettes), journal quotidien et discipline, carnet, playbooks, réglages et photos.
+2. Un **code QR** s'affiche. Sur le téléphone, ouvre l'appareil photo, vise le code, touche le
+   lien. Confirme : ton journal arrive (quelques secondes, un peu plus avec beaucoup de photos).
+   Pas de code sous la main ? **Copier le lien** et envoie-le-toi.
+3. Sur le téléphone, ajoute la page à l'écran d'accueil : iPhone, bouton Partager puis « Sur
+   l'écran d'accueil » ; Android, menu ⋮ puis « Ajouter à l'écran d'accueil ».
+
+Ensuite, rien à faire : ce que tu modifies d'un côté apparaît de l'autre en quelques secondes.
+La synchro se fait à l'ouverture, quand tu reviens sur l'onglet, toutes les 90 secondes et juste
+après chaque modification. La pastille ☁ en haut à droite dit où elle en est : **à jour**,
+**en attente** (pas de réseau, ça part dès qu'il revient) ou **erreur**. Un clic dessus ouvre la carte.
+
+À savoir :
+- **Le code et le lien contiennent ta clé** de publication : ils ouvrent ton journal à
+  n'importe qui. Ne les envoie qu'à toi-même.
+- Si les deux appareils modifient **la même chose** sans s'être synchronisés, la modification la
+  plus récente gagne.
+- **Tout effacer** dans Réglages efface aussi en ligne et sur tes autres appareils.
+- Si tu changes ta clé de publication, il faut relier tes appareils de nouveau.
+- La base gratuite fait 500 Mo, partagée avec les sites clients. La carte affiche la place prise
+  par ton journal ; les photos sont déjà allégées avant l'envoi.
+- La synchro ne remplace pas la sauvegarde JSON : garde l'habitude d'exporter de temps en temps.
+- Côté serveur : table `journal_sync`, fonctions et protections dans `supabase/sync.sql`.
 
 ## 5. La sauvegarde — à lire
 
