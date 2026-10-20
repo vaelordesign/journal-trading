@@ -127,6 +127,21 @@ vraiment à quelque chose :
 - **Stratégie** : choisis un playbook et coche les règles que tu as respectées.
 - **Note d'exécution de 1 à 5** : c'est une note sur *ta discipline*, pas sur le résultat
   en argent. Un trade gagnant peut mériter 1 étoile.
+- **Supprimer ce trade**, en bas de la fenêtre, sur n'importe quel trade. Un trade venu d'un
+  import disparaît des statistiques, du calendrier et du journal du jour, et ne revient pas si
+  tu réimportes le même fichier ; ses ordres restent, donc les trades voisins ne bougent pas.
+  Pour le remettre : **Réglages**, carte **Trades supprimés**, bouton **Remettre**. Un trade
+  manuel, lui, est effacé pour de bon. Avec la synchronisation, la suppression vaut aussi sur
+  ton téléphone.
+
+**Trade incomplet.** Si tu exportes de Tradovate *avant* d'être sorti d'un trade, l'export n'a
+que l'entrée. Avant, cette position restait « ouverte » et se mélangeait à tes trades des jours
+suivants (le 19 octobre, 3 contrats du 16 ont faussé tous les trades du 18 et du 19). Maintenant,
+une position sans aucun ordre pendant plus de 6 heures est **mise de côté** : une alerte jaune
+en haut du tableau de bord la signale, elle ne compte nulle part, et tes trades suivants restent
+justes. Pour la compléter, exporte de nouveau cette journée dans Tradovate (Orders, Filled, à la
+bonne date) et importe le fichier : elle redevient un trade normal. Le délai se change dans
+**Réglages**, carte Compte et risque (0 = jamais, si tu gardes des positions d'un jour à l'autre).
 
 ## 4 bis. Les photos de la journée
 
@@ -335,7 +350,7 @@ avec tes seuls A+ et A.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 247 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 259 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash

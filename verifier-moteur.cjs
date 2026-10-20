@@ -31,7 +31,7 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -537,6 +537,29 @@ verifier('biais haussier : total +480', parS('haussier').total, 480);
 verifier('biais haussier : 3 journees vertes', parS('haussier').joursVerts, 3);
 verifier('pas de biais : 1 journee a -50', parS('neutre').total, -50);
 verifier('rien de note : pas de taux', M.analyseBiais([{ date: '2026-10-01' }], {}).taux, null);
+
+titre('21. Trade incomplet (sortie absente de l\'export) et trades supprimes');
+const fi = (id, sens, qte, prix, quand) => ({ id, symbole: 'MNQ', symboleBrut: 'MNQZ6', sens, qte, prix, commission: 0, temps: new Date(quand).getTime() });
+// le 16 : 2 contrats achetes, la sortie manque dans l'export. Le 19 au soir : un vrai trade.
+const orph = [fi('a1', 'Buy', 2, 100, '2026-10-16T10:53:00'), fi('b1', 'Buy', 5, 110, '2026-10-19T19:00:00'), fi('b2', 'Sell', 5, 120, '2026-10-19T19:30:00')];
+const gi = M.regrouperEnTrades(orph, null, {});
+verifier('la position orpheline du 16 est mise de cote', gi.incomplets.length, 1);
+verifier('incomplet : long 2 entre a 100', gi.incomplets[0].sens + gi.incomplets[0].qte + '@' + gi.incomplets[0].prixEntree, 'long2@100');
+verifier('le trade du 19 est juste : long 5, +100 $', gi.trades.map(t => t.sens + t.qte + ' ' + t.net).join(','), 'long5 100');
+verifier('plus aucune position ouverte', gi.ouvertes.length, 0);
+const g0 = M.regrouperEnTrades(orph, null, { heuresSansOrdre: 0 });
+verifier('regle desactivee (0) : l\'orpheline fausse le 19, aucun trade ferme', g0.trades.length, 0);
+verifier('regle desactivee : il reste une position ouverte', g0.ouvertes.length, 1);
+const court = [fi('c1', 'Buy', 2, 100, '2026-10-16T10:00:00'), fi('c2', 'Sell', 2, 103, '2026-10-16T14:00:00')];
+verifier('4 h sans ordre (sous 6 h) : trade normal', M.regrouperEnTrades(court, null, {}).trades.map(t => t.net).join(','), '12');
+verifier('reglage a 3 h : le meme trade devient incomplet', M.regrouperEnTrades(court, null, { heuresSansOrdre: 3 }).incomplets.length, 1);
+const partiel = [fi('d1', 'Buy', 3, 100, '2026-10-16T10:00:00'), fi('d2', 'Sell', 1, 105, '2026-10-16T10:30:00'), fi('d3', 'Sell', 2, 90, '2026-10-19T19:00:00')];
+const gp = M.regrouperEnTrades(partiel, null, {});
+verifier('sortie partielle puis rien : incomplet avec le profit deja realise', gp.incomplets[0].qte + ' ' + gp.incomplets[0].brutRealise, '2 10');
+verifier('l\'ordre du 19 ne ferme pas l\'orpheline : il ouvre sa propre position', gp.ouvertes.map(o => o.sens + o.qte).join(','), 'short2');
+const tS = [{ cle: 'MNQ#1', net: -298 }, { cle: 'MNQ#2', net: 90 }, { cle: 'man-x', net: 5 }];
+verifier('trade supprime : retire de la liste', M.sansTradesSupprimes(tS, { 'MNQ#1': { quand: 1 } }).map(t => t.cle).join(','), 'MNQ#2,man-x');
+verifier('aucun trade supprime : liste intacte', M.sansTradesSupprimes(tS, undefined).length, 3);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

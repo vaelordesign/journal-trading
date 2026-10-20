@@ -755,6 +755,8 @@ svg text{font-family:inherit}
         <label class="champ"><span>Risque max par trade (%)</span><input type="number" id="rgRisque" step="0.1"></label>
       </div>
       <div class="petit gris">Le risque par trade est calculé à partir du stop prévu que tu inscris dans le détail du trade&nbsp;: distance entrée-stop x quantité x multiplicateur.</div>
+      <label class="champ" style="margin:12px 0 0;max-width:420px"><span>Trade incomplet après (heures sans aucun ordre)</span><input type="number" id="rgHeuresSansOrdre" min="0" step="1"></label>
+      <div class="petit gris">Une position restée ouverte aussi longtemps sans ordre est mise de côté : c'est presque toujours un export pris avant la sortie. 0 = jamais (si tu gardes des positions d'un jour à l'autre).</div>
       <label class="champ" style="margin:12px 0 0;max-width:420px"><span>Mes heures de trading (heure de cet ordinateur)</span><input id="rgHeures" placeholder="08:30-11:00, 13:30-16:00"></label>
       <div class="petit gris">Laisse vide pour ne pas vérifier. Sinon, chaque trade ouvert en dehors est signalé dans la carte Discipline du jour.</div>
     </div>
@@ -863,6 +865,12 @@ svg text{font-family:inherit}
       <div class="petit gris" style="margin-bottom:8px">Le test rejoue les 4 fills d'exemple du cahier des charges dans le moteur de regroupement et affiche le détail du calcul, trade par trade.</div>
       <button id="btnAutotest">Lancer le test</button>
       <div id="sortieAutotest"></div>
+    </div>
+
+    <div class="carte" id="carteSupprimes" hidden>
+      <h3>Trades supprimés</h3>
+      <div class="petit gris" style="margin-bottom:8px">Retirés de ton journal avec le bouton Supprimer ce trade. Leurs ordres restent : les autres trades ne bougent pas.</div>
+      <div id="listeSupprimes"></div>
     </div>
 
     <div class="carte">
@@ -1215,9 +1223,22 @@ function lireFillsDepuisCSV(texte, table){
    La commission d'un fill coupe en deux est repartie au prorata des quantites.
    Les fills sont triees par heure croissante AVANT traitement (le CSV de
    TradingView arrive en ordre decroissant).
+
+   TRADE INCOMPLET : une position restee ouverte plus de o.heuresSansOrdre heures
+   (6 par defaut) sans aucun ordre est mise de cote quand l'ordre suivant arrive.
+   C'est presque toujours un export pris avant la sortie : sans cette regle, la
+   position orpheline se melangerait aux trades des jours suivants et les
+   fausserait tous (vu le 19 oct. 2026 : 3 contrats du 16 oct. ont decale tous les
+   trades du 18 et du 19). Quand l'export complet arrive, le trade se reforme seul.
+   o.heuresSansOrdre = 0 desactive la regle.
 */
-function regrouperEnTrades(fills, table){
+var HEURES_SANS_ORDRE_DEFAUT = 6;
+function regrouperEnTrades(fills, table, o){
   var t = table || MULTIPLICATEURS_DEFAUT;
+  o = o || {};
+  var heures = (o.heuresSansOrdre === undefined || o.heuresSansOrdre === null) ? HEURES_SANS_ORDRE_DEFAUT : Number(o.heuresSansOrdre);
+  var ecartMax = heures > 0 ? heures * 3600000 : 0;
+  var incomplets = [];
   var liste = (fills || []).slice().sort(function(a, b){
     return (a.temps - b.temps) || String(a.id).localeCompare(String(b.id));
   });
@@ -1267,8 +1288,23 @@ function regrouperEnTrades(fills, table){
     };
   }
 
+  function versIncomplet(p){
+    return {
+      symbole: p.symbole, symboleBrut: p.symboleBrut, mult: p.mult,
+      sens: p.qte > 0 ? 'long' : 'short', qte: Math.abs(p.qte), qtePic: p.qtePic,
+      prixEntree: p.prixMoyen, ouverture: p.ouverture, derniere: p.fermeture,
+      brutRealise: arrondiFin(p.brut), commission: arrondiFin(p.commission),
+      nbFills: p.nbFills, fills: p.fills.slice()
+    };
+  }
+
   for (var k = 0; k < liste.length; k++) {
     var f = liste[k];
+    var p0 = positions[f.symbole];
+    if (ecartMax && p0 && !estZero(p0.qte) && f.temps - p0.fermeture > ecartMax) {
+      incomplets.push(versIncomplet(p0));
+      delete positions[f.symbole];
+    }
     var mult = multiplicateurDe(f.symbole, t);
     var signe = f.sens === 'Sell' ? -1 : 1;
     var reste = Math.abs(f.qte);
@@ -1328,7 +1364,14 @@ function regrouperEnTrades(fills, table){
   });
 
   trades.sort(function(a, b){ return a.fermeture - b.fermeture; });
-  return { trades: trades, ouvertes: ouvertes };
+  return { trades: trades, ouvertes: ouvertes, incomplets: incomplets };
+}
+
+// Les trades que Julien a supprimes (reglages.tradesSupprimes, par cle) ne s'affichent
+// plus nulle part. Leurs fills restent : les positions des trades voisins ne bougent pas.
+function sansTradesSupprimes(trades, supprimes){
+  var s = supprimes || {};
+  return (trades || []).filter(function(t){ return !s[t.cle]; });
 }
 // coupe la poussiere des flottants (0.30000000000000004), sans arrondir a la cent
 function arrondiFin(x){ return Math.round(x * 1e6) / 1e6; }
@@ -2727,12 +2770,14 @@ var REGLAGES_DEFAUT = {
   erreursDiscipline: ERREURS_DEFAUT.slice(),
   heuresPermises: '',
   seuilBE: SEUIL_BE_DEFAUT,
+  heuresSansOrdre: HEURES_SANS_ORDRE_DEFAUT,
+  tradesSupprimes: {},
   dossiers: ['Revues de semaine', 'Preparation', 'Idees'],
   inclureSimules: false
 };
 
 var E = {
-  fills: [], trades: [], ouvertes: [],
+  fills: [], trades: [], ouvertes: [], incomplets: [],
   playbooks: [], notes: [], gabarits: [], jours: {},
   reglages: JSON.parse(JSON.stringify(REGLAGES_DEFAUT)),
   plage: { debut: null, fin: null },
@@ -3089,8 +3134,9 @@ async function chargerTout(){
 // Recalcule les trades a partir des fills, en conservant tout ce que
 // Julien a ecrit a la main (stop, cible, notes, etiquettes, captures...).
 async function recalculer(){
-  var g = regrouperEnTrades(E.fills, E.reglages.multiplicateurs);
+  var g = regrouperEnTrades(E.fills, E.reglages.multiplicateurs, { heuresSansOrdre: E.reglages.heuresSansOrdre });
   E.ouvertes = g.ouvertes;
+  E.incomplets = g.incomplets || [];
   var stockes = await dbTous('trades');
   var parCle = {};
   stockes.forEach(function(t){ parCle[t.cle] = t; });
@@ -3116,7 +3162,8 @@ async function recalculer(){
   if (aSupprimer.length) await dbSupprimerLotBrut('trades', aSupprimer);
 
   var manuels = stockes.filter(function(t){ return t.source !== 'csv'; });
-  E.trades = aEcrire.concat(manuels);
+  // les trades supprimes par Julien restent en base (et leurs fills aussi), mais ne s'affichent plus
+  E.trades = sansTradesSupprimes(aEcrire.concat(manuels), E.reglages.tradesSupprimes);
   enrichirTrades();
 }
 
@@ -3566,6 +3613,17 @@ function rendreAlertesRisque(s, trades){
     html += '<div class="avis jaunef">' + depasses.length + ' trade(s) où la perte a dépassé le stop prévu, pour ' +
       fmtArgent(cout) + '. C\'est du stop déplacé ou du stop pas respecté.</div>';
   }
+  // trades incomplets : une sortie manque dans les exports
+  if (E.incomplets && E.incomplets.length) {
+    var plus = E.incomplets.length > 1;
+    html = '<div class="avis jaunef"><b>' + E.incomplets.length + ' trade' + (plus ? 's' : '') + ' incomplet' +
+      (plus ? 's' : '') + ', mis de côté.</b> Il manque ' + (plus ? 'leur' : 'sa') + ' sortie dans tes exports : ' +
+      E.incomplets.map(function(x){
+        return '<b>' + ech(x.symbole) + ' ' + (x.sens === 'long' ? 'long' : 'short') + ' ' + fmtNombre(x.qte, 0) + '</b> entré le ' + fmtDate(x.ouverture);
+      }).join(', ') + '. ' + (plus ? 'Ils ne comptent' : 'Il ne compte') + ' nulle part, pour ne pas fausser tes trades suivants. Pour ' +
+      (plus ? 'les' : 'le') + ' compléter, exporte de nouveau cette journée dans Tradovate (Orders, Filled, à la bonne date) et importe le fichier : ' +
+      (plus ? 'ils redeviendront des trades normaux' : 'il redeviendra un trade normal') + '.</div>' + html;
+  }
   $('#bordAlertes').innerHTML = html;
 }
 
@@ -3915,7 +3973,7 @@ async function ouvrirTrade(cle){
   '<div id="tdPhotos"></div>';
 
   var pied =
-    (t.source === 'manuel' ? '<button class="dangereux" id="tdSupprimer">Supprimer ce trade</button>' : '') +
+    '<button class="dangereux" id="tdSupprimer">Supprimer ce trade</button>' +
     '<button data-fermer>Fermer</button>' +
     '<button class="primaire" id="tdEnregistrer">Enregistrer</button>';
 
@@ -4059,6 +4117,21 @@ async function ouvrirTrade(cle){
   };
   var bs = $('#tdSupprimer', m);
   if (bs) bs.onclick = async function(){
+    // trade venu d'un import : on le retire de tout le journal, sans toucher aux ordres
+    // (les trades voisins restent justes), et il ne revient pas si on reimporte le fichier
+    if (t.source !== 'manuel') {
+      if (!await confirmer('Supprimer ce trade de ton journal ? <b>' + ech(t.symbole) + ' ' + (t.sens === 'long' ? 'long' : 'short') + ' ' +
+          fmtNombre(t.qte, 0) + '</b>, ' + fmtDate(t.ouverture) + ', ' + signe(t.net) + '.<br><br>Il disparaît des statistiques, du calendrier et du journal du jour, ' +
+          'et ne reviendra pas si tu réimportes le même fichier. Tu peux le remettre quand tu veux : Réglages, carte Trades supprimés.', 'Supprimer')) return;
+      E.reglages.tradesSupprimes = Object.assign({}, E.reglages.tradesSupprimes);
+      E.reglages.tradesSupprimes[cle] = { quand: Date.now(), symbole: t.symbole, sens: t.sens, qte: t.qte, net: t.net, ouverture: t.ouverture };
+      await dbMettre('reglages', E.reglages);
+      await recalculer();
+      fermerModale();
+      rendre();
+      toast('Trade supprimé. Réglages, carte Trades supprimés, pour le remettre.', 'vertf');
+      return;
+    }
     if (!await confirmer('Supprimer definitivement ce trade manuel et ses captures ?', 'Supprimer')) return;
     var imgs = await dbParParent('trade:' + cle);
     await dbSupprimerLot('images', imgs.map(function(i){ return i.id; }));
@@ -5971,12 +6044,38 @@ function presetComparaison(quoi){
 /* =======================================================================
    ECRAN 12 : REGLAGES
    ======================================================================= */
+// la carte « Trades supprimes » : chaque trade retire, avec un bouton pour le remettre
+function rendreTradesSupprimes(){
+  var sup = E.reglages.tradesSupprimes || {};
+  var cles = Object.keys(sup).sort(function(a, b){ return (sup[b].ouverture || 0) - (sup[a].ouverture || 0); });
+  $('#carteSupprimes').hidden = !cles.length;
+  $('#listeSupprimes').innerHTML = '<div class="liste-pieces">' + cles.map(function(c){
+    var x = sup[c];
+    return '<div class="piece" style="cursor:default"><div style="flex:1 1 auto"><div class="t">' + ech(x.symbole || '') + ' ' +
+      (x.sens === 'long' ? 'long' : 'short') + ' ' + fmtNombre(x.qte || 0, 0) + '</div><div class="d">' + (x.ouverture ? fmtDate(x.ouverture) : ech(c)) +
+      '</div></div><div class="' + cls(x.net) + ' gras nowrap">' + signe(x.net || 0) + '</div>' +
+      '<button class="pt" data-remettre="' + ech(c) + '">Remettre</button></div>';
+  }).join('') + '</div>';
+  $$('#listeSupprimes [data-remettre]').forEach(function(b){
+    b.onclick = async function(){
+      E.reglages.tradesSupprimes = Object.assign({}, E.reglages.tradesSupprimes);
+      delete E.reglages.tradesSupprimes[b.dataset.remettre];
+      await dbMettre('reglages', E.reglages);
+      await recalculer();
+      rendre();
+      toast('Trade remis dans ton journal.', 'vertf');
+    };
+  });
+}
+
 function rendreReglages(){
   var r = E.reglages;
   $('#rgCompte').value = r.compte;
   $('#rgPerteJour').value = r.perteJourMax;
   $('#rgTradesJour').value = r.tradesJourMax;
   $('#rgRisque').value = r.risqueMaxPct;
+  $('#rgHeuresSansOrdre').value = (r.heuresSansOrdre === undefined || r.heuresSansOrdre === null) ? HEURES_SANS_ORDRE_DEFAUT : r.heuresSansOrdre;
+  rendreTradesSupprimes();
 
   var cles = Object.keys(r.multiplicateurs).sort();
   $('#tblMult tbody').innerHTML = cles.map(function(k){
@@ -7049,6 +7148,13 @@ function brancher(){
   $$('[data-cmp]').forEach(function(b){ b.onclick = function(){ presetComparaison(b.dataset.cmp); }; });
 
   // reglages
+  $('#rgHeuresSansOrdre').onchange = async function(){
+    var v = parseFloat(this.value);
+    E.reglages.heuresSansOrdre = isFinite(v) && v >= 0 ? v : HEURES_SANS_ORDRE_DEFAUT;
+    await dbMettre('reglages', E.reglages);
+    await recalculer();
+    toast('Réglage enregistré, trades recalculés.', 'vertf');
+  };
   ['rgCompte', 'rgPerteJour', 'rgTradesJour', 'rgRisque'].forEach(function(id){
     $('#' + id).onchange = async function(){
       E.reglages.compte = parseFloat($('#rgCompte').value) || 0;
