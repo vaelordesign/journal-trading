@@ -518,8 +518,8 @@ svg text{font-family:inherit}
     <div class="grille g5" style="margin-bottom:14px" id="bordChiffres"></div>
     <div class="grille g2">
       <div class="carte">
-        <h3>Note globale <span class="petit gris">sur 100</span></h3>
-        <div id="bordScore"></div>
+        <h3>Ton mois en R <span class="petit gris" id="bordMoisRInfo"></span></h3>
+        <div id="bordMoisR"></div>
       </div>
       <div class="carte">
         <h3>Chiffres clés</h3>
@@ -1538,6 +1538,10 @@ function ecartType(valeurs){
 }
 
 /* ---------- NOTE GLOBALE SUR 100 ----------
+   PLUS AFFICHEE depuis le 22 oct. 2026, a la demande de Julien : il juge sa strategie au
+   mois en R (« 6 R par mois »), pas a une note par trade. Le tableau de bord montre a la
+   place « Ton mois en R » (rendreMoisR). Gardee et testee ici si on veut la remettre.
+
    Deux notes sur 100, puis leur moyenne. Les seuils sont ici, en clair.
 
    TA STRATEGIE : ce que rapportent tes trades quand tu restes dans tes limites.
@@ -3408,8 +3412,8 @@ function rendreBord(){
     tuileRDuMois();
 
   // ---- note globale ----
-  var ng = noteGlobale(trades, s, E.reglages);
-  $('#bordScore').innerHTML = blocNote(ng);
+  // ---- le mois en cours, en R ----
+  rendreMoisR();
 
   // ---- chiffres cles ----
   var li = [];
@@ -3515,60 +3519,53 @@ function rendreBordR(br, nbTrades){
       ' de la plage n\'' + (manquants > 1 ? 'ont' : 'a') + ' pas encore de R : ' + (manquants > 1 ? 'ils ne comptent' : 'il ne compte') + ' pas ici.</div>' : '');
 }
 
-function blocNote(ng){
-  var couleurDe = function(n){ return n === null ? 'var(--texte3)' : (n >= 70 ? 'var(--vert)' : (n >= 45 ? 'var(--jaune)' : 'var(--rouge)')); };
-  var total = ng.total;
-  var couleur = couleurDe(total);
-  var rayon = 50, circ = 2 * Math.PI * rayon;
-  var rempli = total === null ? 0 : circ * total / 100;
-  var anneau =
-    '<div class="anneau"><svg viewBox="0 0 118 118" width="118" height="118">' +
-    '<circle cx="59" cy="59" r="' + rayon + '" fill="none" stroke="var(--fond3)" stroke-width="9"/>' +
-    '<circle cx="59" cy="59" r="' + rayon + '" fill="none" stroke="' + couleur + '" stroke-width="9" ' +
-    'stroke-linecap="round" stroke-dasharray="' + rempli.toFixed(1) + ' ' + circ.toFixed(1) + '"/></svg>' +
-    '<div class="centre-txt" style="color:' + couleur + '">' + (total === null ? '--' : total) +
-    '<small>' + (total === null ? 'PAS DE DONNÉES' : 'SUR 100') + '</small></div></div>';
-  var barresDe = function(sous){
-    return sous.map(function(x){
-      var n = x.note;
-      return '<div class="barre-ligne" title="' + ech(x.detail) + '">' +
-        '<div class="barre-etq">' + ech(x.nom) + '</div>' +
-        '<div class="barre-piste"><div style="left:0;width:' + (n === null ? 0 : n).toFixed(1) + '%;background:' + couleurDe(n) + '"></div></div>' +
-        '<div class="barre-val">' + (n === null ? '<span class="gris">n.d.</span>' : Math.round(n)) + '</div></div>';
-    }).join('');
-  };
-  var groupe = function(nom, n, sousTitre, sous){
-    return '<div class="note-groupe"><div class="note-titre"><span>' + nom + '</span>' +
-      '<b style="color:' + couleurDe(n) + '">' + (n === null ? 'n.d.' : n + '<small> /100</small>') + '</b></div>' +
-      (sousTitre ? '<div class="gris mini" style="margin:-2px 0 6px">' + sousTitre + '</div>' : '') + barresDe(sous) + '</div>';
-  };
-  var st = ng.strategie, di = ng.discipline;
-  var sousStrat = st.nbTrades ? 'mesurée ' + (st.enR ? 'en R' : 'en dollars') + ' sur ' + st.nbTrades + ' trade' + (st.nbTrades > 1 ? 's' : '') +
-    (st.joursExclus.length ? ', sans tes journées hors limites' : '') : '';
-  var blocs = '<div class="bloc-sous-notes">' +
-    groupe('Ta stratégie', st.total, sousStrat, st.sous) +
-    groupe('Ta discipline', di.total, 'sur toutes tes journées', di.sous) + '</div>';
-
-  var lignes = [];
-  if (st.brute !== null && st.poids < 1) {
-    lignes.push('<b>Ta stratégie fait ' + st.brute + '/100 sur ' + st.nbTrades + ' trade' + (st.nbTrades > 1 ? 's' : '') + '.</b> Tant que tu n\'as pas ' +
-      NOTE_TRADES_FIABLES + ' trades, la note est ramenée vers 50 en proportion : quelques trades ne prouvent pas encore une stratégie. ' +
-      'Elle rejoint sa vraie valeur à ' + NOTE_TRADES_FIABLES + ' trades.');
+/* Carte « Ton mois en R » du tableau de bord. Elle remplace la note sur 100 depuis le
+   22 oct. 2026 : Julien juge sa strategie au mois (« 6 R par mois »), pas a une note
+   par trade. Toujours le vrai mois du calendrier, quelle que soit la plage choisie. */
+function rendreMoisR(){
+  var auj = new Date(), an = auj.getFullYear(), m = auj.getMonth();
+  var avant = new Date(an, m - 1, 1);
+  var duMois = tradesDuMois(an, m);
+  var b = bilanR(duMois), bAvant = bilanR(tradesDuMois(avant.getFullYear(), avant.getMonth()));
+  $('#bordMoisRInfo').textContent = '- ' + MOIS_FR[m] + ' ' + an;
+  if (!b.nb) {
+    $('#bordMoisR').innerHTML = '<div class="petit gris">Aucun R écrit en ' + MOIS_FR[m] + '. Tape le R de tes trades dans le Journal quotidien ' +
+      '(carte Discipline du jour) : +3 si ta cible d\'un 1:3 est touchée, -1 si stop, 0 si BE.' +
+      (bAvant.nb ? '<br>' + nomDuMois(avant.getFullYear(), avant.getMonth()) + ' : <b class="' + cls(bAvant.total) + '">' + fmtR(bAvant.total) + '</b>.' : '') + '</div>';
+    return;
   }
-  if (st.joursExclus.length) {
-    lignes.push('Journées hors limites, mises de côté pour la stratégie mais comptées dans la discipline : ' +
-      st.joursExclus.map(function(c){ return fmtDate(jourDepuisCle(c).getTime(), false); }).join(', ') +
-      ' (' + st.nbExclus + ' trades, ' + signe(st.netExclus, 0) + ').');
-  }
-  if (!st.enR) {
-    lignes.push('La stratégie passe en R dès que ' + NOTE_MIN_TRADES_EN_R + ' de ces trades ont un R écrit : c\'est la mesure la plus juste.');
-  }
-  var detail = '<div class="petit gris" style="margin-top:8px">' +
-    lignes.map(function(l){ return '<div style="margin-bottom:4px">' + l + '</div>'; }).join('') +
-    ng.sous.map(function(x){ return '<div>' + ech(x.nom) + ' : ' + ech(x.detail) + '</div>'; }).join('') +
-    '<div style="margin-top:6px">Note globale = moyenne de ta stratégie et de ta discipline. Repères des seuils : TradeZella. ' +
-    'Les seuils exacts sont écrits en commentaire dans le code, section NOTE GLOBALE.</div></div>';
-  return '<div class="jauge-score">' + anneau + blocs + '</div>' + detail;
+  // les semaines du mois, du lundi au dimanche
+  var semaines = {};
+  duMois.forEach(function(t){
+    var r = rDuTrade(t);
+    if (r === null) return;
+    var d = new Date(t.fermeture);
+    var lundi = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    var k = cleJour(lundi.getTime());
+    if (!semaines[k]) semaines[k] = { total: 0, nb: 0 };
+    semaines[k].total += r; semaines[k].nb++;
+  });
+  var rg = E.reglages;
+  var pctRisque = rg.risqueMaxPct > 0 ? rg.risqueMaxPct : null;
+  var html = '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px">' +
+      '<div class="' + cls(b.total) + '" style="font-size:34px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums">' + fmtR(b.total) + '</div>' +
+      '<div class="petit gris">sur ' + b.nb + ' trade' + (b.nb > 1 ? 's' : '') + ' avec un R' +
+        (bAvant.nb ? '<br>' + MOIS_FR[avant.getMonth()] + ' : <b class="' + cls(bAvant.total) + '">' + fmtR(bAvant.total) + '</b>' : '') + '</div>' +
+    '</div>' +
+    (pctRisque ? '<div class="petit" style="margin-bottom:10px">À ' + fmtNombre(pctRisque, pctRisque % 1 ? 1 : 0) + ' % de risque par trade, ça fait <b class="' + cls(b.total) + '">' +
+      (b.total > 0 ? '+' : '') + fmtNombre(b.total * pctRisque, 1) + ' %</b> de ton compte ce mois-ci' +
+      (rg.compte > 0 ? ', environ <b>' + signe(b.total * pctRisque / 100 * rg.compte, 0) + '</b> sur ' + fmtArgent(rg.compte, 0) : '') + '.</div>' : '') +
+    '<h4 style="margin:4px 0 6px">Semaine par semaine</h4>' +
+    barres(Object.keys(semaines).sort().map(function(k){
+      return { etq: 'Semaine du ' + fmtDate(jourDepuisCle(k).getTime(), false).replace(/ \d{4}$/, ''), val: semaines[k].total, extra: semaines[k].nb + ' tr.' };
+    }), { fmt: function(v){ return fmtR(v); } }) +
+    '<div class="tableau-boite" style="border:0;margin-top:8px"><table class="auto"><tbody>' +
+      ligneInfo('R moyen par trade', '<span class="' + cls(b.moyenne) + '">' + fmtR(b.moyenne) + '</span>') +
+      ligneInfo('Gagnant moyen / perdant moyen', '<span class="vert">' + fmtR(b.moyenneG) + '</span> / <span class="rouge">' + fmtR(b.moyenneP) + '</span>') +
+      ligneInfo('Gagnants, perdants, BE', b.nbG + ' / ' + b.nbP + ' / ' + b.nbBE) +
+      ligneInfo('Meilleur et pire trade', '<span class="vert">' + fmtR(b.meilleur.r) + '</span> / <span class="rouge">' + fmtR(b.pire.r) + '</span>') +
+    '</tbody></table></div>';
+  $('#bordMoisR').innerHTML = html;
 }
 
 function rendreAlertesRisque(s, trades){
@@ -5964,7 +5961,6 @@ function rendreComparaison(){
   };
   var tA = filtre(a1, a2), tB = filtre(b1, b2);
   var sA = statsDeTrades(tA), sB = statsDeTrades(tB);
-  var nA = noteGlobale(tA, sA, E.reglages), nB = noteGlobale(tB, sB, E.reglages);
 
   // sens : +1 = plus haut vaut mieux, -1 = plus bas vaut mieux, 0 = neutre (pas de couleur)
   var arg = function(v){ return v === null ? '--' : fmtArgent(v); };
@@ -5987,10 +5983,7 @@ function rendreComparaison(){
     { nom: 'Total en R', a: sA.nbAvecR ? sA.sommeR : null, b: sB.nbAvecR ? sB.sommeR : null, f: function(v){ return fmtR(v); }, fd: r2Abs, sens: 1 },
     { nom: 'Recul maximal', a: sA.ddMax, b: sB.ddMax, f: function(v){ return fmtArgent(-v); }, fd: argAbs, sens: -1 },
     { nom: 'Commissions', a: sA.commission, b: sB.commission, f: function(v){ return fmtArgent(-v); }, fd: argAbs, sens: -1 },
-    { nom: 'Durée moyenne', a: sA.dureeMoyenne, b: sB.dureeMoyenne, f: fmtDuree, fd: function(v){ return fmtDuree(Math.abs(v)); }, sens: 0 },
-    { nom: 'Note globale sur 100', a: nA.total, b: nB.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 },
-    { nom: 'Note de ta stratégie', a: nA.strategie.total, b: nB.strategie.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 },
-    { nom: 'Note de ta discipline', a: nA.discipline.total, b: nB.discipline.total, f: function(v){ return v === null ? '--' : v; }, fd: function(v){ return Math.round(Math.abs(v)); }, sens: 1 }
+    { nom: 'Durée moyenne', a: sA.dureeMoyenne, b: sB.dureeMoyenne, f: fmtDuree, fd: function(v){ return fmtDuree(Math.abs(v)); }, sens: 0 }
   ];
   var html = '<div class="grille g2" style="margin-bottom:14px">' +
     '<div class="carte"><h4>Période A</h4><div class="petit gris">' + fmtDate(jourDepuisCle(a1).getTime(), false) + ' au ' + fmtDate(jourDepuisCle(a2).getTime(), false) + '</div>' +
@@ -6630,7 +6623,7 @@ async function afficherRapport(p, o){
   UNITE_MONTANT = p.u === '%' ? '%' : '$';
   var trades = tradesDepuisPartage(p);
   var s = statsDeTrades(trades);
-  var ng = noteGlobale(trades, s, p.lim ? { perteJourMax: p.lim[0], tradesJourMax: p.lim[1] } : {});
+  var brRap = bilanR(trades);
   var jours = Object.keys(s.jours).sort().map(function(c){ return s.jours[c]; });
   E.pointsCourbe = s.courbe;
   E.pointsJours = jours;
@@ -6673,7 +6666,11 @@ async function afficherRapport(p, o){
         s.moyenneR === null ? '' : 'R moyen ' + fmtNombre(s.moyenneR, 2) + ' R', cls(s.moyenne)) +
     '</div>' +
     '<div class="grille g2">' +
-      '<div class="carte"><h3>Note globale <span class="petit gris">sur 100</span></h3>' + blocNote(ng) + '</div>' +
+      (brRap.nb ? '<div class="carte"><h3>Résultats en R</h3>' +
+        '<div class="grille g2" style="margin-bottom:10px">' + chiffre('Total en R', fmtR(brRap.total), brRap.nb + ' trades avec un R', cls(brRap.total)) +
+        chiffre('R moyen par trade', fmtR(brRap.moyenne), brRap.nbG + ' gagnants, ' + brRap.nbP + ' perdants', cls(brRap.moyenne)) + '</div>' +
+        '<h4>Par mois</h4>' + barres(brRap.parMois.map(function(x){ return { etq: nomDuMois(+x.mois.slice(0, 4), +x.mois.slice(5) - 1), val: x.total, extra: x.nb + ' tr.' }; }),
+          { fmt: function(v){ return fmtR(v); } }) + '</div>' : '') +
       '<div class="carte"><h3>Chiffres clés</h3><div class="tableau-boite" style="border:0"><table class="auto"><tbody>' +
         ligneInfo('Trades', fmtNombre(s.nb, 0)) +
         ligneInfo('Journées tradées', fmtNombre(s.nbJours, 0) + ' (' + s.nbJoursG + ' vertes / ' + s.nbJoursP + ' rouges)') +

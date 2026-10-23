@@ -260,19 +260,12 @@ dans le journal, après confirmation.
 
 ## 6. Les autres écrans
 
-- **Tableau de bord** : les 4 chiffres, la note sur 100, la courbe de capital, le profit par jour,
-  tes résultats en R et les alertes de risque.
-  La **note sur 100** est la moyenne de deux notes :
-  - **Ta stratégie** : espérance par trade, facteur de profit et marge de réussite (ton taux de
-    réussite contre celui qui suffit avec ton gain moyen et ta perte moyenne). Elle est mesurée
-    **sans les journées hors limites** (perte max du jour ou nombre de trades max de Réglages
-    dépassé) : ces trades-là ne sont pas ta stratégie, c'est la discipline qui les paie. Elle se
-    mesure en R dès que 10 de ces trades ont un R écrit. Sous 20 trades, elle est ramenée vers 50
-    en proportion, parce que quelques trades ne prouvent pas encore une stratégie.
-  - **Ta discipline** : journées dans tes limites, régularité des journées, recul du capital
-    contre tes gains, et le respect des playbooks et des stops quand tu les remplis.
-  Repères des seuils, pris chez TradeZella : facteur de profit 1,3 solide, 1,5 fort,
-  2 exceptionnel ; 0,2 R par trade rentable, 0,5 R fort.
+- **Tableau de bord** : les 5 chiffres du haut, **Ton mois en R**, les chiffres clés, la courbe
+  de capital, le profit par jour, tes résultats en R et les alertes de risque.
+  **Ton mois en R** : le total de tes R du mois en cours, ce que ça représente en % de ton compte
+  (avec ton risque par trade de Réglages), semaine par semaine, et le mois d'avant pour comparer.
+  Elle remplace la note sur 100, retirée le 22 octobre 2026 : elle notait chaque trade un par un
+  et ne disait rien d'un mois à +6 R.
   La plage de dates s'applique partout et vaut **tout l'historique** par défaut.
 - **Calendrier** : une case par jour, verte ou rouge. Le liseré rouge et le ⚠ veulent dire
   qu'une de tes limites de risque a été dépassée ce jour-là. Clic sur un jour pour le détail.
