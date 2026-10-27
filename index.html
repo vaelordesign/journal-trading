@@ -374,13 +374,19 @@ svg text{font-family:inherit}
 .critere.oui{border-color:rgba(38,166,154,.45)}
 .critere.non{border-color:rgba(239,83,80,.5)}
 .setup-ligne{
-  display:grid;grid-template-columns:minmax(0,1fr) 250px 160px;gap:10px;align-items:center;
+  display:grid;grid-template-columns:minmax(0,1fr) 250px 200px;gap:10px;align-items:center;
   padding:7px 9px;border:1px solid var(--bord);border-radius:8px;margin-bottom:6px;background:var(--fond);
 }
 .setup-ligne .t{font-size:13px;cursor:pointer;font-variant-numeric:tabular-nums}
 .setup-ligne .t:hover{color:#fff}
 @media(max-width:760px){.setup-ligne{grid-template-columns:minmax(0,1fr);gap:6px}}
 .saisie-r{display:flex;gap:4px;align-items:center}
+.saisie-r .poubelle{margin-left:auto;color:var(--rouge-clair);border-color:var(--bord);background:transparent;padding:3px 8px;font-size:16px;line-height:1.2}
+.saisie-r .poubelle:hover{border-color:var(--rouge);background:var(--rouge-fond)}
+#tblTrades td.case-sel{width:34px;text-align:center}
+#tblTrades td.case-sel input{width:auto;pointer-events:none}
+#tblTrades tr.choisi td{background:var(--rouge-fond)}
+#thSel[hidden],#barreSel[hidden],#btnSelTrades[hidden]{display:none}
 .saisie-r input{width:70px;padding:5px 7px;text-align:right;font-variant-numeric:tabular-nums}
 .saisie-r.grande input{width:150px;text-align:left}
 .saisie-r button{padding:5px 9px;font-size:12px;flex:0 0 auto}
@@ -581,11 +587,14 @@ svg text{font-family:inherit}
           <option value="p">Perdants</option>
           <option value="n">Nuls</option>
         </select>
+        <button class="pt" id="btnSelTrades">&#128465; Supprimer des trades</button>
         <button class="primaire pt" id="btnNouveauTrade">+ Trade manuel</button>
       </div>
     </div>
+    <div class="avis rougef" id="barreSel" hidden></div>
     <div class="tableau-boite">
       <table id="tblTrades"><thead><tr>
+        <th id="thSel" hidden></th>
         <th class="triable" data-tri="symbole">Symbole</th>
         <th class="triable" data-tri="ouverture">Entrée</th>
         <th class="triable" data-tri="fermeture">Sortie</th>
@@ -2781,7 +2790,7 @@ var REGLAGES_DEFAUT = {
 };
 
 var E = {
-  fills: [], trades: [], ouvertes: [], incomplets: [],
+  fills: [], trades: [], ouvertes: [], incomplets: [], selTrades: null,
   playbooks: [], notes: [], gabarits: [], jours: {},
   reglages: JSON.parse(JSON.stringify(REGLAGES_DEFAUT)),
   plage: { debut: null, fin: null },
@@ -3826,7 +3835,9 @@ function tableauTrades(liste, compact){
 
 function ligneTrade(compact, t){
   var r = rDuTrade(t);
-  return '<tr class="clic" data-cle="' + ech(t.cle) + '">' +
+  var sel = !compact && E.selTrades;
+  return '<tr class="clic' + (sel && E.selTrades[t.cle] ? ' choisi' : '') + '" data-cle="' + ech(t.cle) + '">' +
+    (sel ? '<td class="case-sel"><input type="checkbox" tabindex="-1"' + (E.selTrades[t.cle] ? ' checked' : '') + '></td>' : '') +
     '<td>' + ech(t.symbole) + (t.simule ? ' <span class="puce j">simulé</span>' : '') +
       (t.source === 'manuel' && !t.simule ? ' <span class="puce a">manuel</span>' : '') + '</td>' +
     '<td class="gris">' + fmtDate(t.ouverture) + '</td>' +
@@ -3857,11 +3868,37 @@ function rendreTrades(){
   $('#tblTrades tbody').innerHTML = liste.length
     ? liste.map(ligneTrade.bind(null, false)).join('')
     : '<tr><td colspan="12" class="centre gris" style="padding:26px">Aucun trade. Importe un CSV d\'ordres exécutés (Tradovate ou TradingView) dans l\'onglet Import, ou ajoute un trade manuel.</td></tr>';
+  majBarreSelection(liste);
   $$('#tblTrades th.triable').forEach(function(th){
     var actif = th.dataset.tri === E.tri.col;
     th.innerHTML = th.innerHTML.replace(/ [▲▼]$/, '') + (actif ? (E.tri.sens > 0 ? ' ▲' : ' ▼') : '');
   });
 }
+// Mode « Supprimer des trades » de l'ecran Trades : E.selTrades = { cle: true } quand il est actif.
+function majBarreSelection(liste){
+  var barre = $('#barreSel');
+  $('#thSel').hidden = !E.selTrades;
+  $('#btnSelTrades').hidden = !!E.selTrades;
+  barre.hidden = !E.selTrades;
+  if (!E.selTrades) return;
+  var cles = Object.keys(E.selTrades);
+  var total = cles.reduce(function(a, c){ var t = tradeParCle(c); return a + (t ? Number(t.net) || 0 : 0); }, 0);
+  barre.innerHTML = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<span>Touche les trades à supprimer. <b>' + cles.length + ' sélectionné' + (cles.length > 1 ? 's' : '') + '</b>' +
+      (cles.length ? ' (' + signe(total) + ')' : '') + '.</span>' +
+    '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">' +
+      '<button class="pt" id="selTout">Tout cocher (' + liste.length + ')</button>' +
+      '<button class="pt" id="selAnnuler">Annuler</button>' +
+      '<button class="dangereux pt" id="selSupprimer"' + (cles.length ? '' : ' disabled') + '>Supprimer la sélection</button>' +
+    '</span></div>';
+  $('#selTout').onclick = function(){ liste.forEach(function(t){ E.selTrades[t.cle] = true; }); rendreTrades(); };
+  $('#selAnnuler').onclick = function(){ E.selTrades = null; rendreTrades(); };
+  $('#selSupprimer').onclick = async function(){
+    if (await supprimerTrades(Object.keys(E.selTrades))) E.selTrades = null;
+    rendreTrades();
+  };
+}
+
 /* =======================================================================
    ECRAN 5 : DETAIL D'UN TRADE  (le coeur du journal)
    ======================================================================= */
@@ -4084,6 +4121,13 @@ async function ouvrirTrade(cle){
   btnHaut.title = 'Ajouter des photos à ce trade';
   btnHaut.onclick = function(){ photos.input.click(); };
   $('.modale-entete', m).insertBefore(btnHaut, $('.modale-entete .fermer', m));
+  // supprimer, visible sans defiler (sur le telephone, le bas de la fenetre est loin)
+  var btnSuppr = document.createElement('button');
+  btnSuppr.className = 'dangereux pt';
+  btnSuppr.innerHTML = '&#128465;&nbsp; Supprimer';
+  btnSuppr.title = 'Supprimer ce trade du journal';
+  btnSuppr.style.marginLeft = '6px';
+  $('.modale-entete', m).insertBefore(btnSuppr, $('.modale-entete .fermer', m));
 
   // ---------- enregistrement ----------
   $('#tdEnregistrer', m).onclick = async function(){
@@ -4112,32 +4156,54 @@ async function ouvrirTrade(cle){
     rendre();
     toast('Trade enregistré.', 'vertf');
   };
-  var bs = $('#tdSupprimer', m);
-  if (bs) bs.onclick = async function(){
-    // trade venu d'un import : on le retire de tout le journal, sans toucher aux ordres
-    // (les trades voisins restent justes), et il ne revient pas si on reimporte le fichier
-    if (t.source !== 'manuel') {
-      if (!await confirmer('Supprimer ce trade de ton journal ? <b>' + ech(t.symbole) + ' ' + (t.sens === 'long' ? 'long' : 'short') + ' ' +
-          fmtNombre(t.qte, 0) + '</b>, ' + fmtDate(t.ouverture) + ', ' + signe(t.net) + '.<br><br>Il disparaît des statistiques, du calendrier et du journal du jour, ' +
-          'et ne reviendra pas si tu réimportes le même fichier. Tu peux le remettre quand tu veux : Réglages, carte Trades supprimés.', 'Supprimer')) return;
-      E.reglages.tradesSupprimes = Object.assign({}, E.reglages.tradesSupprimes);
-      E.reglages.tradesSupprimes[cle] = { quand: Date.now(), symbole: t.symbole, sens: t.sens, qte: t.qte, net: t.net, ouverture: t.ouverture };
-      await dbMettre('reglages', E.reglages);
-      await recalculer();
-      fermerModale();
-      rendre();
-      toast('Trade supprimé. Réglages, carte Trades supprimés, pour le remettre.', 'vertf');
-      return;
-    }
-    if (!await confirmer('Supprimer definitivement ce trade manuel et ses captures ?', 'Supprimer')) return;
-    var imgs = await dbParParent('trade:' + cle);
-    await dbSupprimerLot('images', imgs.map(function(i){ return i.id; }));
-    await dbSupprimer('trades', cle);
-    E.trades = E.trades.filter(function(x){ return x.cle !== cle; });
-    fermerModale();
-    rendre();
-    toast('Trade supprimé.');
+  var supprimerIci = async function(){
+    if (await supprimerTrades([cle])) { fermerModale(); rendre(); }
+    else if ($('#voile').hidden) ouvrirTrade(cle);   // annule : on rouvre la fenetre du trade
   };
+  btnSuppr.onclick = supprimerIci;
+  var bs = $('#tdSupprimer', m);
+  if (bs) bs.onclick = supprimerIci;
+}
+
+/* Supprime un ou plusieurs trades apres UNE seule confirmation.
+   - Trade venu d'un import : retire de partout (reglages.tradesSupprimes, synchronise),
+     ses ordres restent donc les trades voisins ne bougent pas, il ne revient pas si on
+     reimporte le fichier, et il se remet depuis Reglages, carte Trades supprimes.
+   - Trade manuel : efface pour de bon, avec ses photos.
+   Renvoie true si la suppression a eu lieu. */
+async function supprimerTrades(cles){
+  var liste = (cles || []).map(tradeParCle).filter(Boolean);
+  if (!liste.length) return false;
+  var importes = liste.filter(function(t){ return t.source !== 'manuel'; });
+  var manuels = liste.filter(function(t){ return t.source === 'manuel'; });
+  var total = liste.reduce(function(a, t){ return a + (Number(t.net) || 0); }, 0);
+  var t0 = liste[0];
+  var resume = liste.length === 1
+    ? '<b>' + ech(t0.symbole) + ' ' + (t0.sens === 'long' ? 'long' : 'short') + ' ' + fmtNombre(t0.qte, 0) + '</b>, ' + fmtDate(t0.ouverture) + ', ' + signe(t0.net)
+    : '<b>' + liste.length + ' trades</b>, ' + signe(total) + ' au total';
+  var msg = 'Supprimer ' + (liste.length === 1 ? 'ce trade' : 'ces trades') + ' de ton journal ? ' + resume + '.<br><br>' +
+    (importes.length ? (liste.length === 1 ? 'Il disparaît' : 'Ils disparaissent') + ' des statistiques, du calendrier et du journal du jour, ' +
+      'et ne ' + (liste.length === 1 ? 'reviendra' : 'reviendront') + ' pas si tu réimportes le même fichier. ' +
+      'Tu peux ' + (liste.length === 1 ? 'le' : 'les') + ' remettre quand tu veux : Réglages, carte Trades supprimés.' : '') +
+    (manuels.length ? (importes.length ? '<br>' : '') + (manuels.length === 1 ? 'Le trade manuel est effacé' : 'Les ' + manuels.length + ' trades manuels sont effacés') +
+      ' pour de bon, avec ' + (manuels.length === 1 ? 'ses' : 'leurs') + ' photos.' : '') +
+    (SYNC.actif ? '<br>Ça vaut aussi pour ton téléphone.' : '');
+  if (!await confirmer(msg, liste.length === 1 ? 'Supprimer' : 'Supprimer les ' + liste.length)) return false;
+  if (importes.length) {
+    E.reglages.tradesSupprimes = Object.assign({}, E.reglages.tradesSupprimes);
+    importes.forEach(function(t){
+      E.reglages.tradesSupprimes[t.cle] = { quand: Date.now(), symbole: t.symbole, sens: t.sens, qte: t.qte, net: t.net, ouverture: t.ouverture };
+    });
+    await dbMettre('reglages', E.reglages);
+  }
+  for (var i = 0; i < manuels.length; i++) {
+    var imgs = await dbParParent('trade:' + manuels[i].cle);
+    await dbSupprimerLot('images', imgs.map(function(x){ return x.id; }));
+    await dbSupprimer('trades', manuels[i].cle);
+  }
+  await recalculer();
+  toast(liste.length === 1 ? 'Trade supprimé.' : liste.length + ' trades supprimés.', 'vertf');
+  return true;
 }
 
 function ligneInfo(k, v){
@@ -5233,7 +5299,8 @@ function rendreCarteDiscipline(cle, jourStats){
             ' &middot; <b class="' + cls(t.net) + '">' + signe(t.net, 0) + '</b></div>' +
           '<div class="echelle5">' + boutonsQualite(t.qualite) + '</div>' +
           '<div class="saisie-r"><input data-r autocomplete="off" placeholder="R" title="Ton résultat en R" value="' + rPourSaisie(t.rManuel) + '">' +
-            '<button type="button" data-rv="-1" title="stop touché">-1</button><button type="button" data-rv="0" title="break-even">0</button></div></div>';
+            '<button type="button" data-rv="-1" title="stop touché">-1</button><button type="button" data-rv="0" title="break-even">0</button>' +
+            '<button type="button" class="poubelle" data-suppr title="Supprimer ce trade du journal">&#128465;</button></div></div>';
       }).join('') + '</div>' +
       '<div class="gris mini">' + LEGENDE_QUALITE + ' Note-le comme tu le voyais avant d\'entrer, pas d\'après le résultat.<br>' +
         '<b>R</b> : le résultat du trade, tapé à la main. +3 si ta cible d\'un 1:3 est touchée, -1 si stop, 0 si BE, 1,5 si tu sors avant.</div>'
@@ -5356,6 +5423,7 @@ function rendreCarteDiscipline(cle, jourStats){
     var t = tradeParCle(ligne.dataset.tq);
     if (!t) return;
     $('[data-ouvrir]', ligne).onclick = function(){ ouvrirTrade(t.cle); };
+    $('[data-suppr]', ligne).onclick = async function(){ if (await supprimerTrades([t.cle])) rendre(); };
     // le R s'enregistre des qu'on quitte la case (ou Entree), ou d'un tap sur -1 / 0
     var caseR = $('input[data-r]', ligne);
     colorerSaisieR(caseR, lireR(caseR.value));
@@ -7086,8 +7154,17 @@ function brancher(){
   // trades
   $('#tblTrades tbody').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-cle]');
-    if (tr) ouvrirTrade(tr.dataset.cle);
+    if (!tr) return;
+    // en mode selection, toucher une ligne la coche ou la decoche au lieu d'ouvrir le trade
+    if (E.selTrades) {
+      var c = tr.dataset.cle;
+      if (E.selTrades[c]) delete E.selTrades[c]; else E.selTrades[c] = true;
+      rendreTrades();
+      return;
+    }
+    ouvrirTrade(tr.dataset.cle);
   });
+  $('#btnSelTrades').onclick = function(){ E.selTrades = {}; rendreTrades(); };
   $$('#tblTrades th.triable').forEach(function(th){
     th.onclick = function(){
       var c = th.dataset.tri;

@@ -127,12 +127,16 @@ vraiment à quelque chose :
 - **Stratégie** : choisis un playbook et coche les règles que tu as respectées.
 - **Note d'exécution de 1 à 5** : c'est une note sur *ta discipline*, pas sur le résultat
   en argent. Un trade gagnant peut mériter 1 étoile.
-- **Supprimer ce trade**, en bas de la fenêtre, sur n'importe quel trade. Un trade venu d'un
-  import disparaît des statistiques, du calendrier et du journal du jour, et ne revient pas si
-  tu réimportes le même fichier ; ses ordres restent, donc les trades voisins ne bougent pas.
-  Pour le remettre : **Réglages**, carte **Trades supprimés**, bouton **Remettre**. Un trade
-  manuel, lui, est effacé pour de bon. Avec la synchronisation, la suppression vaut aussi sur
-  ton téléphone.
+- **Supprimer un trade**, trois façons :
+  - dans la fenêtre du trade, le bouton **🗑 Supprimer** en haut, à côté de 📷 Photos ;
+  - dans **Trades**, le bouton **🗑 Supprimer des trades** : tu touches les lignes à enlever (elles
+    se cochent au lieu de s'ouvrir), puis **Supprimer la sélection**, une seule confirmation ;
+  - dans le **Journal quotidien**, carte Discipline du jour, la petite 🗑 au bout de chaque trade.
+  Un trade venu d'un import disparaît des statistiques, du calendrier et du journal du jour, et ne
+  revient pas si tu réimportes le même fichier ; ses ordres restent, donc les trades voisins ne
+  bougent pas. Pour le remettre : **Réglages**, carte **Trades supprimés**, bouton **Remettre**.
+  Un trade manuel, lui, est effacé pour de bon. Avec la synchronisation, la suppression vaut aussi
+  sur ton téléphone.
 
 **Trade incomplet.** Si tu exportes de Tradovate *avant* d'être sorti d'un trade, l'export n'a
 que l'entrée. Avant, cette position restait « ouverte » et se mélangeait à tes trades des jours
