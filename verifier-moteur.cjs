@@ -31,7 +31,7 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes, resultatTrade };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -560,6 +560,32 @@ verifier('l\'ordre du 19 ne ferme pas l\'orpheline : il ouvre sa propre position
 const tS = [{ cle: 'MNQ#1', net: -298 }, { cle: 'MNQ#2', net: 90 }, { cle: 'man-x', net: 5 }];
 verifier('trade supprime : retire de la liste', M.sansTradesSupprimes(tS, { 'MNQ#1': { quand: 1 } }).map(t => t.cle).join(','), 'MNQ#2,man-x');
 verifier('aucun trade supprime : liste intacte', M.sansTradesSupprimes(tS, undefined).length, 3);
+
+titre('22. Un trade marque 0 R est BE (taux de reussite)');
+const tb = (cle, net, r, h) => ({ cle, net, brut: net, commission: 0, qte: 1, rManuel: r,
+  ouverture: new Date('2026-10-28T' + h).getTime(), fermeture: new Date('2026-10-28T' + h).getTime() + 60000 });
+const tB = [
+  tb('a', 4, 0, '09:40:00'),        // +4 $ mais 0 R : BE
+  tb('b', 300, 3, '10:00:00'),      // gagnant
+  tb('c', -100, -1, '10:20:00'),    // perdant
+  tb('d', 50, undefined, '10:40:00'), // pas de R : les dollars decident, gagnant
+  tb('e', -6, 0, '11:00:00')        // -6 $ (commission) mais 0 R : BE
+];
+verifier('0 R a +4 $ : BE', M.resultatTrade(tB[0], 0), 'be');
+verifier('0 R a -6 $ : BE', M.resultatTrade(tB[4], 0), 'be');
+verifier('sans R : les dollars decident', M.resultatTrade(tB[3], 0), 'g');
+verifier('R negatif : perdant', M.resultatTrade(tB[2], 0), 'p');
+verifier('R -1 ecrit sur un trade a +51 $ : reste gagnant (les dollars decident)', M.resultatTrade({ net: 51, rManuel: -1 }, 0), 'g');
+const sB = M.statsDeTrades(tB);
+verifier('2 gagnants, 1 perdant, 2 BE', sB.nbG + '/' + sB.nbP + '/' + sB.nbN, '2/1/2');
+verifier('taux de reussite 2 sur 3 (les BE ne comptent pas)', sB.tauxReussite, 2 / 3);
+verifier('gain moyen sur les seuls gagnants (300 + 50) / 2', sB.moyenneGain, 175);
+verifier('perte moyenne sur les seuls perdants', sB.moyennePerte, 100);
+verifier('facteur de profit toujours en dollars (354 / 106)', sB.facteurProfit, 354 / 106);
+verifier('profit total intact', sB.net, 248);
+// Tes journees : un premier trade a +40 $ (au-dessus du seuil de 10 $) mais marque 0 R est BE
+const ajB = M.analyseJournees([tb('p1', 40, 0, '09:35:00'), tb('p2', 120, 1.2, '10:10:00')], { seuilBE: 10 });
+verifier('Tes journees : premier trade a 0 R classe BE', ajB.premier.be.nbJours + '/' + ajB.premier.g.nbJours, '1/0');
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');

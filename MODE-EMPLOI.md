@@ -118,6 +118,9 @@ vraiment à quelque chose :
   (total, R moyen, gagnant moyen contre perdant moyen, courbe et total par mois), colonne R des
   Trades, R du jour dans le Calendrier et le Journal quotidien, colonne R moyen des
   Statistiques, et Comparaison. « 1:3 » est refusé : on écrit ce que le trade a donné.
+  **Un trade marqué 0 R est un BE** : il ne compte ni comme gagnant ni comme perdant dans ton
+  taux de réussite, même s'il a fini à +4 $ ou -6 $. Pour les autres trades, ce sont les dollars
+  qui disent gagnant ou perdant. Dans Trades, le filtre « BE (0 R) » les montre tous.
   Le **total R du mois** est en haut du Tableau de bord (avec celui du mois d'avant), dans
   l'en-tête du Calendrier et dans « Mois en chiffres » (avec le R de chaque semaine), à côté du
   résultat du jour dans le Journal quotidien, et dans le calendrier de ton profil public.

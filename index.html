@@ -585,7 +585,7 @@ svg text{font-family:inherit}
           <option value="">Tous les résultats</option>
           <option value="g">Gagnants</option>
           <option value="p">Perdants</option>
-          <option value="n">Nuls</option>
+          <option value="n">BE (0 R)</option>
         </select>
         <button class="pt" id="btnSelTrades">&#128465; Supprimer des trades</button>
         <button class="primaire pt" id="btnNouveauTrade">+ Trade manuel</button>
@@ -1458,7 +1458,7 @@ function statsDeTrades(trades){
   };
   if (!trades || !trades.length) return s;
   var liste = trades.slice().sort(function(a, b){ return a.fermeture - b.fermeture; });
-  var serieG = 0, serieP = 0, cumul = 0, sommet = 0;
+  var serieG = 0, serieP = 0, cumul = 0, sommet = 0, sommeGagnants = 0, sommePerdants = 0;
   for (var i = 0; i < liste.length; i++) {
     var t = liste[i];
     var net = Number(t.net) || 0;
@@ -1466,8 +1466,12 @@ function statsDeTrades(trades){
     s.brut += Number(t.brut) || 0;
     s.commission += Number(t.commission) || 0;
     s.volumeQte += Number(t.qte) || 0;
-    if (net > 0) { s.gains += net; s.nbG++; serieG++; serieP = 0; if (net > s.plusGrosGain) s.plusGrosGain = net; }
-    else if (net < 0) { s.pertes += -net; s.nbP++; serieP++; serieG = 0; if (net < s.plusGrossePerte) s.plusGrossePerte = net; }
+    if (net > 0) { s.gains += net; if (net > s.plusGrosGain) s.plusGrosGain = net; }
+    else if (net < 0) { s.pertes += -net; if (net < s.plusGrossePerte) s.plusGrossePerte = net; }
+    // gagnant, perdant ou BE : un trade marque 0 R est BE, sinon les dollars decident
+    var issue = resultatTrade(t, 0);
+    if (issue === 'g') { s.nbG++; sommeGagnants += net; serieG++; serieP = 0; }
+    else if (issue === 'p') { s.nbP++; sommePerdants += -net; serieP++; serieG = 0; }
     else { s.nbN++; }
     s.serieGMax = Math.max(s.serieGMax, serieG);
     s.seriePMax = Math.max(s.seriePMax, serieP);
@@ -1487,8 +1491,8 @@ function statsDeTrades(trades){
   s.tauxReussite = s.nbG + s.nbP > 0 ? s.nbG / (s.nbG + s.nbP) : null;
   s.facteurProfit = s.pertes > 0 ? s.gains / s.pertes : (s.gains > 0 ? Infinity : null);
   s.moyenne = s.nb ? s.net / s.nb : null;
-  s.moyenneGain = s.nbG ? s.gains / s.nbG : null;
-  s.moyennePerte = s.nbP ? s.pertes / s.nbP : null;
+  s.moyenneGain = s.nbG ? sommeGagnants / s.nbG : null;
+  s.moyennePerte = s.nbP ? sommePerdants / s.nbP : null;
   s.ratioGainPerte = (s.moyenneGain && s.moyennePerte) ? s.moyenneGain / s.moyennePerte : null;
   s.esperance = s.moyenne;
   s.moyenneR = s.nbAvecR ? s.sommeR / s.nbAvecR : null;
@@ -2133,6 +2137,14 @@ function resultatDe(net, seuil){
   if (n < -s) return 'p';
   return 'be';
 }
+// Gagnant, perdant ou BE pour UN trade. Un trade ou Julien a ecrit 0 R est BE, meme s'il a
+// fini a +4 $ ou -6 $ (demande de Julien, 30 oct. 2026). Pour tout le reste, c'est le profit
+// net qui decide, avec le seuil BE facultatif (un R ecrit -1 sur un trade a +51 $ ne le
+// change pas en perdant : c'est plus probablement une erreur de saisie).
+function resultatTrade(t, seuil){
+  if (t && t.rManuel === 0) return 'be';
+  return resultatDe(t ? t.net : 0, seuil);
+}
 
 function journeesOrdonnees(trades){
   var m = {};
@@ -2172,7 +2184,7 @@ function tradesAvecRegle(jour, regle, o){
     var t = jour.trades[i];
     gardes.push(t);
     cumul += Number(t.net) || 0;
-    var r = resultatDe(t.net, seuil);
+    var r = resultatTrade(t, seuil);
     if (r === 'p') nbP++;
     var stop = false;
     if (regle.max) stop = gardes.length >= regle.max;
@@ -2256,7 +2268,7 @@ function analyseJournees(trades, o){
   jours.forEach(function(j){
     var t1 = j.trades[0];
     var n1 = Number(t1.net) || 0;
-    P[resultatDe(n1, seuil)].jours.push({ cle: j.cle, premier: n1, net: j.net, suite: j.net - n1, nbSuite: j.nb - 1 });
+    P[resultatTrade(t1, seuil)].jours.push({ cle: j.cle, premier: n1, net: j.net, suite: j.net - n1, nbSuite: j.nb - 1 });
   });
   res.premier = {};
   Object.keys(P).forEach(function(k){
@@ -2307,10 +2319,10 @@ function analyseJournees(trades, o){
     for (var i = 1; i < j.trades.length; i++) {
       var prec = j.trades[i - 1], t = j.trades[i];
       if (t.ouverture < prec.fermeture) continue;
-      var r = resultatDe(prec.net, seuil);
+      var r = resultatTrade(prec, seuil);
       var delai = (t.ouverture - prec.fermeture) / 60000;
       A[r].push(t); D[r].push(delai);
-      if (r === 'p' && i >= 2 && resultatDe(j.trades[i - 2].net, seuil) === 'p' && prec.ouverture >= j.trades[i - 2].fermeture) {
+      if (r === 'p' && i >= 2 && resultatTrade(j.trades[i - 2], seuil) === 'p' && prec.ouverture >= j.trades[i - 2].fermeture) {
         A.p2.push(t); D.p2.push(delai);
       }
     }
@@ -3410,7 +3422,7 @@ function rendreBord(){
     chiffre('Profit net total', signe(s.net), s.nb + ' trades clôturé' + (s.nb > 1 ? 's' : '') +
       (s.commission ? ' - ' + fmtArgent(s.commission) + ' de commissions' : ''), cls(s.net)) +
     chiffre('Taux de réussite', s.tauxReussite === null ? '--' : fmtNombre(s.tauxReussite * 100, 1) + ' %',
-      s.nbG + ' gagnants / ' + s.nbP + ' perdants' + (s.nbN ? ' / ' + s.nbN + ' nuls' : '')) +
+      s.nbG + ' gagnants / ' + s.nbP + ' perdants' + (s.nbN ? ' / ' + s.nbN + ' BE' : '')) +
     chiffre('Facteur de profit', s.facteurProfit === null ? '--' :
       (s.facteurProfit === Infinity ? 'infini' : fmtNombre(s.facteurProfit, 2)),
       fmtArgent(s.gains, 0) + ' de gains contre ' + fmtArgent(s.pertes, 0) + ' de pertes',
@@ -3798,9 +3810,9 @@ function tradesFiltresEtTries(){
     });
   }
   if (fs) liste = liste.filter(function(t){ return t.sens === fs; });
-  if (fr === 'g') liste = liste.filter(function(t){ return t.net > 0; });
-  if (fr === 'p') liste = liste.filter(function(t){ return t.net < 0; });
-  if (fr === 'n') liste = liste.filter(function(t){ return !t.net; });
+  if (fr === 'g') liste = liste.filter(function(t){ return resultatTrade(t, 0) === 'g'; });
+  if (fr === 'p') liste = liste.filter(function(t){ return resultatTrade(t, 0) === 'p'; });
+  if (fr === 'n') liste = liste.filter(function(t){ return resultatTrade(t, 0) === 'be'; });
   var col = E.tri.col, sg = E.tri.sens;
   var val = function(t){
     switch (col) {
@@ -4589,7 +4601,7 @@ function rendreStatsJournees(trades){
     '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Un trade compte comme <b>BE</b> ' +
     '(break-even) s\'il finit entre <span class="nowrap">-<input type="number" id="stSeuilBE" min="0" step="1" value="' + seuil +
     '" style="width:70px;display:inline-block;padding:3px 6px"> $</span> et <span class="nowrap">+' + fmtNombre(seuil, 0) + ' $</span>. ' +
-    '<span class="gris">Au-dessus il est gagnant, en dessous il est perdant.</span></div></div>';
+    '<span class="gris">Au-dessus il est gagnant, en dessous il est perdant. Un trade où tu as écrit 0 R est toujours BE.</span></div></div>';
 
   if (!a.nbJours) {
     $('#statsJournees').innerHTML = html + '<div class="vide">Aucun trade sur la plage choisie.</div>';
