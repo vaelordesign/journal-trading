@@ -233,6 +233,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .cal-case.actif:hover{border-color:var(--bord2)}
 .cal-case.g{background:var(--vert-fond);border-color:rgba(38,166,154,.45)}
 .cal-case.p{background:var(--rouge-fond);border-color:rgba(239,83,80,.45)}
+.cal-case.be{background:rgba(240,185,11,.26);border-color:rgba(240,185,11,.85)}
+.cal-case.sans{background:rgba(240,185,11,.13);border-color:rgba(240,185,11,.55)}
+.cal-case .jval.be{color:#ffd45e}
+.cal-case .jbe{font-size:9px;font-weight:700;letter-spacing:.05em}
+.cal-case .jsans{color:#ffd45e}
+.cal-legende{margin-top:10px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+.cal-legende .leg-item{display:inline-flex;align-items:center}
+.cal-legende .leg{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid var(--bord2)}
+.cal-legende .leg.g{background:var(--vert-fond);border-color:rgba(38,166,154,.6)}
+.cal-legende .leg.p{background:var(--rouge-fond);border-color:rgba(239,83,80,.6)}
+.cal-legende .leg.be{background:rgba(240,185,11,.26);border-color:rgba(240,185,11,.85)}
+.cal-legende .leg.sans{background:rgba(240,185,11,.13);border-color:rgba(240,185,11,.55)}
 .cal-case.enfreint{box-shadow:inset 0 0 0 2px var(--rouge)}
 .cal-case .jnum{font-size:11px;color:var(--texte2)}
 .cal-case .jval{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
@@ -243,6 +255,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   .cal-case{min-height:58px;padding:4px}
   .cal-case .jval{font-size:11px}
   .cal-case .jnb{font-size:9px}
+  .cal-case .jsans{display:none}
+  .cal-case .jbe{display:none}
 }
 
 .voile{
@@ -562,6 +576,7 @@ svg text{font-family:inherit}
     <div class="carte">
       <div class="cal-grille" id="calNoms"></div>
       <div class="cal-grille" id="calGrille" style="margin-top:5px"></div>
+      <div class="petit gris cal-legende" id="calLegende"></div>
     </div>
     <div class="carte">
       <h3>Mois en chiffres</h3>
@@ -2145,6 +2160,16 @@ function resultatTrade(t, seuil){
   if (t && t.rManuel === 0) return 'be';
   return resultatDe(t ? t.net : 0, seuil);
 }
+// Une journee BE : son resultat tient dans le seuil BE (+/- seuilBE $), ou ses R ecrits font
+// 0 R au total (+1 R puis -1 R), ou tous ses trades sont BE (marques 0 R, ou dans le seuil).
+// Le calendrier la colore en jaune. jour = { net, trades }.
+function journeeEstBE(jour, seuil){
+  if (!jour || !jour.trades || !jour.trades.length) return false;
+  if (Math.abs(Number(jour.net) || 0) <= Math.abs(Number(seuil) || 0)) return true;
+  var rs = jour.trades.map(function(t){ return (typeof t.rManuel === 'number' && isFinite(t.rManuel)) ? t.rManuel : null; });
+  if (rs.every(function(r){ return r !== null; }) && estZero(rs.reduce(function(a, b){ return a + b; }, 0))) return true;
+  return jour.trades.every(function(t){ return resultatTrade(t, seuil) === 'be'; });
+}
 
 function journeesOrdonnees(trades){
   var m = {};
@@ -3657,9 +3682,13 @@ function nomsJoursHtml(){
 
 // sMois : statsDeTrades des trades du mois. infra et notes sont facultatifs
 // (le profil public ne montre ni les limites de risque ni le journal ecrit).
-function grilleCalendrierHtml(sMois, an, mois, infra, notes){
+// o (facultatif) : { seuilBE, debut: 'AAAA-MM-JJ' du premier trade connu, aujourdhui: 'AAAA-MM-JJ' }
+function grilleCalendrierHtml(sMois, an, mois, infra, notes, o){
   infra = infra || {};
   notes = notes || {};
+  o = o || {};
+  var seuil = (o.seuilBE === undefined || o.seuilBE === null) ? SEUIL_BE_DEFAUT : o.seuilBE;
+  var aujourdhui = o.aujourdhui || cleJour(Date.now());
   var premier = new Date(an, mois, 1);
   var decalage = (premier.getDay() + 6) % 7;   // lundi en premier
   var nbJours = new Date(an, mois + 1, 0).getDate();
@@ -3671,14 +3700,20 @@ function grilleCalendrierHtml(sMois, an, mois, infra, notes){
     var note = notes[cle];
     var aNote = journalEcrit(note);
     var c = 'cal-case actif';
-    if (jour) c += jour.net > 0 ? ' g' : (jour.net < 0 ? ' p' : '');
+    var estBE = jour && journeeEstBE(jour, seuil);
+    var jsem = new Date(an, mois, j).getDay();
+    // jour de semaine passe, sans trade, depuis le premier trade du journal : jaune pale
+    var sansTrade = !jour && jsem >= 1 && jsem <= 5 && !!o.debut && cle >= o.debut && cle <= aujourdhui;
+    if (jour) c += estBE ? ' be' : (jour.net > 0 ? ' g' : (jour.net < 0 ? ' p' : ''));
+    else if (sansTrade) c += ' sans';
     if (infra[cle]) c += ' enfreint';
     cases.push('<div class="' + c + '" data-jour="' + cle + '"' +
       (infra[cle] ? ' data-bulle="' + ech(infra[cle].join(' ; ')) + '"' : '') + '>' +
       '<div class="jnum">' + j + (note ? pastilleDiscipline(note.discipline, 'discipline ' + note.discipline + '/10') : '') + '</div>' +
-      (jour ? '<div class="jval ' + cls(jour.net) + '">' + signe(jour.net, 0) + '</div>' +
+      (jour ? '<div class="jval ' + (estBE ? 'be' : cls(jour.net)) + '">' + signe(jour.net, 0) + (estBE ? ' <span class="jbe">BE</span>' : '') + '</div>' +
               (function(){ var br = bilanR(jour.trades); return br.nb ? '<div class="jr">' + fmtR(br.total, 1) + '</div>' : ''; })() +
               '<div class="jnb">' + jour.nb + ' trade' + (jour.nb > 1 ? 's' : '') + '</div>' : '') +
+      (sansTrade ? '<div class="jnb jsans">pas de trade</div>' : '') +
       (infra[cle] ? '<div class="alerte">&#9888;</div>' : '') +
       (aNote ? '<div class="note-pt" title="journal écrit"></div>' : '') +
       '</div>');
@@ -3701,7 +3736,18 @@ function rendreCalendrier(){
   var infra = joursEnInfraction(sMois, E.reglages, duMois);
 
   $('#calNoms').innerHTML = nomsJoursHtml();
-  $('#calGrille').innerHTML = grilleCalendrierHtml(sMois, an, mois, infra, E.jours);
+  var seuilBE = (E.reglages.seuilBE === undefined || E.reglages.seuilBE === null) ? SEUIL_BE_DEFAUT : E.reglages.seuilBE;
+  var debut = tous.reduce(function(m, t){ var c = cleJour(t.fermeture); return !m || c < m ? c : m; }, null);
+  $('#calGrille').innerHTML = grilleCalendrierHtml(sMois, an, mois, infra, E.jours, { seuilBE: seuilBE, debut: debut });
+  $('#calLegende').innerHTML = '<span class="leg-item"><span class="leg g"></span>journée gagnante</span>' +
+    '<span class="leg-item"><span class="leg p"></span>perdante</span>' +
+    '<span class="leg-item"><span class="leg be"></span>BE (entre -' + fmtNombre(seuilBE, 0) + ' $ et +' + fmtNombre(seuilBE, 0) + ' $, ou 0 R au total)</span>' +
+    '<span class="leg-item"><span class="leg sans"></span>jour de semaine sans trade</span>';
+  var nbBE = 0, nbV = 0, nbR = 0;
+  Object.keys(sMois.jours).forEach(function(k){
+    var jj = sMois.jours[k];
+    if (journeeEstBE(jj, seuilBE)) nbBE++; else if (jj.net > 0) nbV++; else if (jj.net < 0) nbR++;
+  });
 
   var bMois = bilanR(duMois);
   $('#calResume').innerHTML = sMois.nb
@@ -3732,7 +3778,7 @@ function rendreCalendrier(){
     '<div class="grille g4" style="margin-bottom:12px">' +
       chiffre('Profit du mois', signe(sMois.net), sMois.nb + ' trades', cls(sMois.net)) +
       chiffre('Taux de réussite', sMois.tauxReussite === null ? '--' : fmtNombre(sMois.tauxReussite * 100, 1) + ' %', sMois.nbG + ' / ' + sMois.nbP) +
-      chiffre('Journées vertes', sMois.nbJoursG + ' / ' + sMois.nbJours, sMois.nbJoursP + ' journée(s) rouge(s)') +
+      chiffre('Journées vertes', nbV + ' / ' + sMois.nbJours, nbR + ' rouge' + (nbR > 1 ? 's' : '') + ', ' + nbBE + ' BE') +
       chiffre('Meilleure journée', sMois.meilleurJour ? fmtArgent(sMois.meilleurJour.net) : '--',
         sMois.pireJour ? 'pire : ' + fmtArgent(sMois.pireJour.net) : '') +
     '</div>' +
@@ -6817,7 +6863,8 @@ async function afficherRapport(p, o){
     });
     var sm = statsDeTrades(duMois);
     $('#rapCalTitre').textContent = MOIS_FR[mois].charAt(0).toUpperCase() + MOIS_FR[mois].slice(1) + ' ' + an;
-    $('#rapCalGrille').innerHTML = grilleCalendrierHtml(sm, an, mois, null, null);
+    $('#rapCalGrille').innerHTML = grilleCalendrierHtml(sm, an, mois, null, null, { seuilBE: SEUIL_BE_DEFAUT,
+      debut: trades.reduce(function(m, t){ var c = cleJour(t.fermeture); return !m || c < m ? c : m; }, null) });
     var bm = bilanR(duMois);
     $('#rapCalResume').innerHTML = sm.nb
       ? '<span class="' + cls(sm.net) + ' gras">' + signe(sm.net) + '</span> sur ' + sm.nb + ' trades, ' +

@@ -274,7 +274,11 @@ dans le journal, après confirmation.
   Elle remplace la note sur 100, retirée le 22 octobre 2026 : elle notait chaque trade un par un
   et ne disait rien d'un mois à +6 R.
   La plage de dates s'applique partout et vaut **tout l'historique** par défaut.
-- **Calendrier** : une case par jour, verte ou rouge. Le liseré rouge et le ⚠ veulent dire
+- **Calendrier** : une case par jour, verte ou rouge. **Jaune** pour une journée BE (entre
+  -10 $ et +10 $, le seuil BE de Tes journées, ou 0 R au total, ou que des trades à 0 R) et, en
+  jaune plus pâle, pour un jour de semaine sans trade depuis ton premier trade (« pas de trade »).
+  Les fins de semaine et les jours à venir restent neutres. La légende est sous le calendrier, et
+  « Mois en chiffres » compte les journées vertes, rouges et BE. Le liseré rouge et le ⚠ veulent dire
   qu'une de tes limites de risque a été dépassée ce jour-là. Clic sur un jour pour le détail.
 - **Statistiques** : par étiquette, par heure d'entrée, par jour de la semaine, par symbole,
   par note d'exécution, par qualité du setup, la répartition des profits, et en bas long contre

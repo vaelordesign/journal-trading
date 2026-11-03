@@ -31,7 +31,7 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes, resultatTrade };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes, resultatTrade, journeeEstBE };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -586,6 +586,17 @@ verifier('profit total intact', sB.net, 248);
 // Tes journees : un premier trade a +40 $ (au-dessus du seuil de 10 $) mais marque 0 R est BE
 const ajB = M.analyseJournees([tb('p1', 40, 0, '09:35:00'), tb('p2', 120, 1.2, '10:10:00')], { seuilBE: 10 });
 verifier('Tes journees : premier trade a 0 R classe BE', ajB.premier.be.nbJours + '/' + ajB.premier.g.nbJours, '1/0');
+
+titre('23. Journee BE (jaune au calendrier)');
+const jb = (net, trades) => ({ net, trades });
+verifier('journee a +8 $ (dans le seuil de 10 $) : BE', M.journeeEstBE(jb(8, [{ net: 300 }, { net: -292 }]), 10), true);
+verifier('journee a +37,50 $ dont le seul trade est marque 0 R : BE', M.journeeEstBE(jb(37.5, [{ net: 37.5, rManuel: 0 }]), 10), true);
+verifier('journee a +150 $ : pas BE', M.journeeEstBE(jb(150, [{ net: 150 }]), 10), false);
+verifier('un trade a 0 R et un gagnant : pas BE', M.journeeEstBE(jb(204, [{ net: 4, rManuel: 0 }, { net: 200, rManuel: 2 }]), 10), false);
+verifier('journee a -10 $ pile : BE', M.journeeEstBE(jb(-10, [{ net: -10 }]), 10), true);
+verifier('+1 R puis -1 R : 0 R au total, BE meme a +40 $', M.journeeEstBE(jb(40, [{ net: 240, rManuel: 1 }, { net: -200, rManuel: -1 }]), 10), true);
+verifier('+1 R et un trade sans R : pas BE', M.journeeEstBE(jb(40, [{ net: 240, rManuel: 1 }, { net: -200 }]), 10), false);
+verifier('pas de trade : pas une journee BE (c\'est un jour sans trade)', M.journeeEstBE(jb(0, []), 10), false);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');
