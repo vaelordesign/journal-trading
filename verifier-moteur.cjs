@@ -31,7 +31,8 @@ const M = new Function(code + `
            analyseDiscipline, tradesSuspectsVengeance, faitsDiscipline, niveauDiscipline,
            lirePlagesHoraires, dansPlagesHoraires, tradesApresPerteMax, analyseQualite,
            analyseJournees, resultatDe, trancheDuree, trancheTaille,
-           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes, resultatTrade, journeeEstBE };
+           rDuTrade, lireR, fmtR, bilanR, surEchelle, NOTE_ECHELLES, analyseBiais, sansTradesSupprimes, resultatTrade, journeeEstBE,
+           QUALITES, GRILLE_PORTES, GRILLE_BONUS, grilleRemplie, noteGrille, qualiteDeGrille, analyseGrille };
 `)();
 
 let echecs = 0, reussites = 0;
@@ -309,11 +310,15 @@ const aq = M.analyseQualite([tq('A+', 300), tq('A', 100), tq('B', -150), tq('C',
 verifier('5 trades notes (le 6e ne l\'est pas)', aq.nbNotes, 5);
 verifier('tous les trades notes : +100', aq.netNotes, 100);
 verifier('seulement A+ et A : +400', aq.netBons, 400);
-verifier('les C : 2 trades', aq.groupes[3].nb, 2);
+verifier('les C : 2 trades', aq.groupes.filter(g => g.qualite === 'C')[0].nb, 2);
 const aqD = M.analyseQualite([tq('A+', 300), tq('D', -400), tq('D', -100)]);
 verifier('la note D est comptee', aqD.nbNotes, 3);
-verifier('les D : 2 trades, -500', aqD.groupes[4].net, -500);
+verifier('les D : 2 trades, -500', aqD.groupes.filter(g => g.qualite === 'D')[0].net, -500);
 verifier('sans les D, seulement A+ et A : +300', aqD.netBons, 300);
+const aqPP = M.analyseQualite([tq('A++', 500), tq('A+', 300), tq('C', -200)]);
+verifier('A++ est une qualite, du meilleur au pire', M.QUALITES.join(' '), 'A++ A+ A B C D');
+verifier('A++ compte parmi les bons setups : +800', aqPP.netBons, 800);
+verifier('les A++ : 1 trade', aqPP.groupes.filter(g => g.qualite === 'A++')[0].nb, 1);
 const anObj = M.analyseDiscipline([
   { date: '2026-09-01', objectifTenu: true }, { date: '2026-09-02', objectifTenu: true },
   { date: '2026-09-03', objectifTenu: false }
@@ -597,6 +602,48 @@ verifier('journee a -10 $ pile : BE', M.journeeEstBE(jb(-10, [{ net: -10 }]), 10
 verifier('+1 R puis -1 R : 0 R au total, BE meme a +40 $', M.journeeEstBE(jb(40, [{ net: 240, rManuel: 1 }, { net: -200, rManuel: -1 }]), 10), true);
 verifier('+1 R et un trade sans R : pas BE', M.journeeEstBE(jb(40, [{ net: 240, rManuel: 1 }, { net: -200 }]), 10), false);
 verifier('pas de trade : pas une journee BE (c\'est un jour sans trade)', M.journeeEstBE(jb(0, []), 10), false);
+
+titre('24. Grille IFVG : la note du setup sur 100');
+const portes = { htf: true, po3: true, dol: true, lrl: true, stop: true, ifvg: true };
+const gr = (extra, judas) => ({ c: Object.assign({}, portes, extra || {}), judas: judas || 'non' });
+const totalPts = M.GRILLE_PORTES.concat(M.GRILLE_BONUS).reduce((a, x) => a + x.pts, 0) + 16;
+verifier('le total des points fait 100', totalPts, 100);
+verifier('grille vide : pas de note', M.noteGrille({ c: {}, judas: 'non' }), null);
+verifier('grille absente : pas remplie', M.grilleRemplie(undefined), false);
+verifier('les 6 portes seules : 48, C', M.noteGrille(gr()).score + ' ' + M.noteGrille(gr()).note, '48 C');
+verifier('portes + Judas dans un HTF gap : 64, B', M.noteGrille(gr({}, 'in')).score + ' ' + M.noteGrille(gr({}, 'in')).note, '64 B');
+verifier('portes + Judas + CISD : 72, A', M.noteGrille(gr({ cisd: true }, 'in')).note, 'A');
+verifier('portes + Judas + 3 confirmations : 88, A+', M.noteGrille(gr({ cisd: true, smt: true, sponso: true }, 'in')).score + ' ' +
+  M.noteGrille(gr({ cisd: true, smt: true, sponso: true }, 'in')).note, '88 A+');
+const sansHunt = gr({ cisd: true, smt: true, sponso: true, amd: true }, 'in');
+verifier('tout sauf le stop hunt : 96, A++', M.noteGrille(sansHunt).score + ' ' + M.noteGrille(sansHunt).note, '96 A++');
+verifier('tout coche : 100, A++', M.noteGrille(gr({ cisd: true, smt: true, sponso: true, amd: true, hunt: true }, 'in')).score, 100);
+verifier('les 4 confirmations sans Judas : 80, A', M.noteGrille(gr({ cisd: true, smt: true, sponso: true, amd: true })).note, 'A');
+verifier('2 confirmations sans Judas + stop hunt : 68, B', M.noteGrille(gr({ cisd: true, smt: true, hunt: true })).note, 'B');
+const sansStop = { c: { htf: true, po3: true, dol: true, lrl: true, ifvg: true, cisd: true, smt: true, sponso: true, amd: true }, judas: 'in' };
+verifier('une porte manque : pas de trade malgre 88 points', M.noteGrille(sansStop).note + ' ' + M.noteGrille(sansStop).score, 'X 88');
+verifier('la porte qui manque est nommee', M.noteGrille(sansStop).manque.join(','), 'Stop HRL');
+verifier('Judas hors HTF gap : pas de trade', M.noteGrille(gr({ cisd: true }, 'out')).note, 'X');
+verifier('pas de trade donne la qualite D', M.qualiteDeGrille(gr({}, 'out')), 'D');
+verifier('A++ donne la qualite A++', M.qualiteDeGrille(sansHunt), 'A++');
+verifier('le Judas hors gap seul suffit a remplir la grille', M.grilleRemplie({ c: {}, judas: 'out' }), true);
+const tg = (g, net, r) => ({ cle: 'g' + Math.random(), grille: g, net, brut: net, commission: 0, qte: 1, rManuel: r, fermeture: h('10:00:00') });
+const ag = M.analyseGrille([
+  tg(gr({ cisd: true, smt: true, sponso: true }, 'in'), 300, 3),   // A+
+  tg(gr({ smt: true, amd: true }, 'in'), 200, 2),                   // A (80)
+  tg(gr(), -100, -1),                                                // C
+  tg(sansStop, -100, -1),                                            // pas de trade
+  { cle: 'sans', net: 999, brut: 999, commission: 0, qte: 1, rManuel: 5, fermeture: h('10:00:00') }   // pas de grille : ignore
+]);
+verifier('4 trades avec la grille (le 5e n\'en a pas)', ag.nb, 4);
+verifier('les A+ : 1 trade, +3 R', ag.parNote.filter(g => g.note === 'A+')[0].moyenneR, 3);
+verifier('pas de trade pris quand meme : -1 R', ag.parNote.filter(g => g.note === 'X')[0].moyenneR, -1);
+const smt = ag.criteres.filter(c => c.k === 'smt')[0];
+verifier('SMT : 3 trades avec (A+, A et le pas de trade), 1 sans', smt.nbOui + '/' + smt.nbNon, '3/1');
+verifier('SMT : +1,33 R avec, -1 R sans, ecart +2,33 R', smt.ecartR, 4 / 3 + 1);
+const stopC = ag.criteres.filter(c => c.k === 'stop')[0];
+verifier('Stop HRL : 3 avec (+1,33 R), 1 sans (-1 R)', stopC.nbOui + '/' + stopC.nbNon, '3/1');
+verifier('score moyen : (88 + 80 + 48 + 88) / 4 = 76', ag.scoreMoyen, 76);
 
 console.log('\n' + '='.repeat(58));
 console.log(reussites + ' verifications reussies, ' + echecs + ' echec(s).');
