@@ -348,13 +348,32 @@ Les listes de règles et d'erreurs se modifient dans **Réglages**, carte Discip
 de trading (par exemple `08:30-11:00, 13:30-16:00`) se règlent dans la carte Compte et risque.
 
 **Qualité du setup** : dans la carte Discipline du jour, chaque trade de la journée a ses
-boutons D, C, B, A, A+ (ils sont aussi dans le détail du trade). Note selon ce que tu voyais
+boutons D, C, B, A, A+, A++ (ils sont aussi dans le détail du trade). Note selon ce que tu voyais
 *avant* d'entrer. Statistiques et Discipline te montrent alors ce qu'aurait donné ton compte
-avec tes seuls A+ et A.
+avec tes seuls A++, A+ et A.
+
+## 6 ter. La grille IFVG
+
+Sous chaque trade de la carte Discipline du jour, le bouton **Grille IFVG** ouvre ta grille
+(elle est aussi dans le détail du trade). Tu coches ce que tu voyais avant d'entrer et la note
+monte sur 100 :
+
+- les **6 portes**, obligatoires, 8 points chacune : biais HTF, PO3, DOL, LRL en target,
+  stop derrière un protected low (HRL), IFVG valide ;
+- le **Judas swing** : dans un HTF gap, 16 points ; hors d'un HTF gap, pas de trade ;
+- les **confirmations**, 8 points chacune : CISD, SMT, IFVG sponsorisé, AMD ; le stop hunt vaut 4.
+
+A++ de 96 à 100, A+ de 85 à 95, A de 70 à 84, B de 60 à 69, C de 48 à 59. S'il manque une seule
+porte, ou si le Judas est hors d'un HTF gap, c'est **pas de trade** quel que soit le score. La note
+remplit la qualité du setup toute seule (pas de trade = D) ; tu peux encore la changer à la main.
+
+L'écran **Grille IFVG** montre ce que rapporte chaque note et chaque critère, avec ou sans,
+en R et en dollars, sur la plage choisie en haut. Il contient aussi le schéma du scénario A++
+et la définition de chaque critère.
 
 ## 7. Vérifier que le calcul est juste
 
-Le calcul est couvert par 259 vérifications automatiques. Si tu as Node installé, dans ce
+Le calcul est couvert par 306 vérifications automatiques. Si tu as Node installé, dans ce
 dossier :
 
 ```bash
