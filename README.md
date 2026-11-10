@@ -32,11 +32,8 @@ aucune donnée qui sort du navigateur.
   chiffre chaque erreur et chaque règle, confronte la note aux faits tirés des trades
   (perte max, nombre de trades, stop dépassé, reprise précipitée après une perte, heures),
   et montre la courbe de capital sans les jours indisciplinés.
-- **Qualité du setup** de D à A++ sur chaque trade, notée depuis le journal du jour, et ce qu'aurait donné le compte avec
-  les seuls A++, A+ et A.
-- **Grille IFVG** : la note du setup sur 100, cochée critère par critère sous chaque trade
-  (6 portes, Judas dans un HTF gap, CISD, SMT, sponsorship, AMD, stop hunt). Elle remplit la
-  qualité du setup, et son écran chiffre ce que rapporte chaque note et chaque critère.
+- **Qualité du setup** de D à A+ sur chaque trade, notée depuis le journal du jour, et ce qu'aurait donné le compte avec
+  les seuls A+ et A.
 - **Journal quotidien** : préparation du matin en cases séparées (biais, nuit, liquidité, niveaux,
   annonces, invalidation, scénarios A et B, plan de risque), résumé de la journée et justesse du biais.
 - **Carnet libre** avec gabarits, **comparaison de périodes**,
@@ -59,7 +56,7 @@ nulle part : pour passer d'un appareil à l'autre, exporter puis importer.
 node verifier-moteur.cjs
 ```
 
-306 vérifications. Le script ne contient pas de copie de la logique : il découpe le bloc
+110 vérifications. Le script ne contient pas de copie de la logique : il découpe le bloc
 compris entre `DEBUT MOTEUR` et `FIN MOTEUR` dans `index.html` et le rejoue, donc il teste
 bien le code livré. Le même test est accessible dans la page, onglet Réglages.
 
